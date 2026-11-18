@@ -1,0 +1,17 @@
+# Coordenadas de ejemplo en el frame map. Verificar visualmente en RViz2
+# que cada pose esté dentro de espacio libre de my_map.pgm antes de ejecutar.
+mission:
+  frame_id: map
+  waypoints:
+    - name: Punto_A
+      x: 0.50
+      y: 0.00
+      yaw_deg: 0.0
+    - name: Punto_B
+      x: 1.00
+      y: 0.50
+      yaw_deg: 90.0
+    - name: Punto_C
+      x: 0.50
+      y: 1.00
+      yaw_deg: 180.0
