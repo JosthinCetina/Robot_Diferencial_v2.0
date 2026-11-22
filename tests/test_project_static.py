@@ -459,3 +459,12 @@ def test_simulation_defaults_reduce_wsl_load_without_removing_sensors():
     assert '<update_rate>5</update_rate>' in sensors
     assert '<width>320</width><height>240</height>' in sensors
     assert '<visualize>false</visualize>' in sensors
+
+
+def test_wsl_deployer_avoids_local_expansion_inside_remote_shell():
+    deploy = (ROOT / 'deploy_wsl.sh').read_text()
+    remote = deploy.split('docker exec "$CONTAINER" bash -lc \'', 1)[1].split("\\n'\\n", 1)[0]
+    assert "'" not in remote
+    assert "awk '{print $1}'" not in deploy
+    assert 'DIFBOT_SKIP_IMAGE_BUILD' in deploy
+    assert 'LOCK_HASH="${LOCK_HASH%% *}"' in deploy
