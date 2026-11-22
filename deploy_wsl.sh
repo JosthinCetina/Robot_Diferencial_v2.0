@@ -74,7 +74,7 @@ elif [[ -f "$IMAGE_STAMP" && "$(cat "$IMAGE_STAMP")" == "$DOCKERFILE_HASH" ]] \
 else
   info "Construyendo imagen Docker $IMAGE desde el checkout WSL..."
   docker build -t "$IMAGE" "$PROJECT_DIR"
-  printf '%s\\n' "$DOCKERFILE_HASH" > "$IMAGE_STAMP"
+  printf '%s\n' "$DOCKERFILE_HASH" > "$IMAGE_STAMP"
 fi
 
 # Reuse the existing named volume as a preserved backup; this deployment uses a
@@ -137,7 +137,7 @@ docker exec "$CONTAINER" bash -lc '
   LOCK_MARKER="node_modules/.difbot-package-lock.sha256"
   if [[ ! -x node_modules/.bin/vite || ! -f "$LOCK_MARKER" || "$(cat "$LOCK_MARKER" 2>/dev/null || true)" != "$LOCK_HASH" ]]; then
     npm ci
-    printf "%s\\n" "$LOCK_HASH" > "$LOCK_MARKER"
+    printf "%s\n" "$LOCK_HASH" > "$LOCK_MARKER"
   else
     echo "Frontend: package-lock sin cambios; se conservan node_modules."
   fi
