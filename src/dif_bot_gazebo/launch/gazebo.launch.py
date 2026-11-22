@@ -2,7 +2,7 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.conditions import UnlessCondition
+from launch.conditions import IfCondition, UnlessCondition
 from launch.actions import (
     DeclareLaunchArgument,
     IncludeLaunchDescription,
@@ -72,7 +72,6 @@ def generate_launch_description():
     spawn_robot = Node(
         package='ros_gz_sim',
         executable='create',
-        name='spawn_dif_bot',
         arguments=[
             '-world', world_name,
             '-param', 'robot_description',
@@ -110,6 +109,7 @@ def generate_launch_description():
             '60',
         ],
         output='screen',
+        condition=IfCondition(use_ros2_control),
     )
 
     diff_spawner = Node(
@@ -123,6 +123,7 @@ def generate_launch_description():
             '60',
         ],
         output='screen',
+        condition=IfCondition(use_ros2_control),
     )
 
     # In ros2_control mode, controller_manager is created by the Gazebo model

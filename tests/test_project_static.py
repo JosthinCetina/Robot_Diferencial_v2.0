@@ -305,6 +305,8 @@ def test_gazebo_spawn_uses_explicit_world_and_robot_description_parameter():
     assert 'gz_sim.launch.py' in launch
     assert 'on_exit_shutdown' in launch
     assert 'target_action=spawn_robot' in launch
+    assert launch.count('condition=IfCondition(use_ros2_control)') == 2
+    assert "name='spawn_dif_bot'" not in launch
 
 
 def test_start_script_fails_loudly_when_robot_did_not_spawn():
