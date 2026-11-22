@@ -5,11 +5,15 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch.conditions import IfCondition
 
 
 def generate_launch_description():
     share = get_package_share_directory('dif_bot_navigation')
     params = LaunchConfiguration('params_file')
+    map_file = LaunchConfiguration('map_file')
+    rviz_config = LaunchConfiguration('rviz_config')
+    launch_rviz = LaunchConfiguration('launch_rviz')
     ekf_yaml = LaunchConfiguration('ekf_params_file')
     waypoints = LaunchConfiguration('waypoints_file')
     use_sim_time = LaunchConfiguration('use_sim_time')
@@ -34,6 +38,16 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='true'),
         DeclareLaunchArgument('autostart', default_value='true'),
+        DeclareLaunchArgument(
+            'map_file',
+            default_value=os.path.join(share, 'maps', 'my_map.yaml'),
+            description='Mapa YAML que usarán Map Server y AMCL.',
+        ),
+        DeclareLaunchArgument('launch_rviz', default_value='false'),
+        DeclareLaunchArgument(
+            'rviz_config',
+            default_value=os.path.join(share, 'config', 'navigation.rviz'),
+        ),
         DeclareLaunchArgument(
             'params_file',
             default_value=os.path.join(share, 'config', 'nav2_params.yaml'),
@@ -74,7 +88,7 @@ def generate_launch_description():
             executable='map_server',
             name='map_server',
             output='screen',
-            parameters=[params, {'use_sim_time': use_sim_time}],
+            parameters=[params, {'use_sim_time': use_sim_time, 'yaml_filename': map_file}],
         ),
         Node(
             package='nav2_amcl',
@@ -122,6 +136,15 @@ def generate_launch_description():
                 **lifecycle_manager_parameters,
                 'node_names': localization_nodes,
             }],
+        ),
+        Node(
+            package='rviz2',
+            executable='rviz2',
+            name='nav2_rviz',
+            arguments=['-d', rviz_config],
+            parameters=[{'use_sim_time': use_sim_time}],
+            output='screen',
+            condition=IfCondition(launch_rviz),
         ),
         Node(
             package='nav2_lifecycle_manager',

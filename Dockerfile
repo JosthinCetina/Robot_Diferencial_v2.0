@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-navigation2 \
     ros-jazzy-nav2-bringup \
     ros-jazzy-nav2-simple-commander \
+    ros-jazzy-nav2-rviz-plugins \
     ros-jazzy-slam-toolbox \
     ros-jazzy-twist-mux \
     ros-jazzy-rosbridge-suite \
