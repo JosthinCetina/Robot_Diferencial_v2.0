@@ -195,3 +195,17 @@ ros2 bag record -o /ros2_ws/validation_bag /clock /scan /imu/data /odom_raw /odo
 ```
 
 Evidencia recomendada: video del mundo/robot, terminal de controladores, RViz2 con TF/mapa/costmaps, panel web, logs de la misión y un rosbag de navegación completa.
+
+
+## Fase 7A — Orientación final y progreso angular
+
+El panel web acepta X e Y y un yaw final opcional en grados. Si el campo yaw queda vacío, conserva la orientación del robot al enviar la meta; no debe imponer yaw=0 por omisión.
+
+Con una meta XY cercana, verificar que:
+- `/dif_bot/web/goal_pose` contiene un cuaternión normalizado y un yaw coherente con la selección de la interfaz.
+- `controller_server` utiliza `nav2_controller::PoseProgressChecker`.
+- `required_movement_angle` registra la rotación en el sitio como progreso.
+- Cuando el robot entra en la ventana XY pero tiene error angular, DWB sigue publicando `angular.z` en `/cmd_vel_nav` hasta cumplir `yaw_goal_tolerance`.
+- La acción termina `SUCCEEDED`; un `ABORTED` no se reinterpreta como éxito únicamente por estar dentro de XY.
+
+Parámetros de referencia: XY 0,05 m, yaw 0,10 rad, radio de progreso 0,08 m, progreso angular 0,05 rad y allowance 30 s.

@@ -89,19 +89,33 @@ class GoalBridgeNode(Node):
             self.publish_status('ERROR: Servidor Nav2 inactivo')
             return
 
+        frame_id = (msg.header.frame_id or '').lstrip('/')
+        if frame_id != 'map':
+            self.publish_status(f'ERROR: La meta web debe usar frame map; se recibió {frame_id or "(vacío)"}.')
+            return
+        coordinates = (msg.pose.position.x, msg.pose.position.y, msg.pose.position.z,
+                       msg.pose.orientation.x, msg.pose.orientation.y,
+                       msg.pose.orientation.z, msg.pose.orientation.w)
+        if not all(math.isfinite(value) for value in coordinates):
+            self.publish_status('ERROR: La meta contiene coordenadas o cuaternión no finitos.')
+            return
         goal_msg = NavigateToPose.Goal()
         goal_msg.pose = msg
         goal_msg.pose.header.frame_id = 'map'
         goal_msg.pose.header.stamp = Time().to_msg()
-
-        # Replace a zero quaternion with the identity quaternion.
+        # Normalize the quaternion; treat a zero quaternion as identity.
         q = goal_msg.pose.pose.orientation
-        norm_sq = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w
-        if norm_sq < 1e-4:
+        norm = math.sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w)
+        if norm < 1e-6:
             q.x = 0.0
             q.y = 0.0
             q.z = 0.0
             q.w = 1.0
+        else:
+            q.x /= norm
+            q.y /= norm
+            q.z /= norm
+            q.w /= norm
 
         target_goal = goal_msg.pose
         self.publish_status(
@@ -232,13 +246,18 @@ class GoalBridgeNode(Node):
                     return
 
             if geometry is not None:
+                if geometry[0] <= self.xy_goal_tolerance and geometry[1] > self.yaw_goal_tolerance:
+                    diagnosis = ('La posición está dentro de la tolerancia XY, pero la orientación final no se alcanzó; '
+                                 'revise el progreso angular y el yaw solicitado.')
+                else:
+                    diagnosis = 'La pose final está fuera de las tolerancias configuradas.'
                 message = (
                     'ABORTADO_NAV2: la acción terminó ABORTED; '
                     f'error_XY={geometry[0]:.3f}m '
                     f'(límite {self.xy_goal_tolerance:.3f}m); '
                     f'error_yaw={geometry[1]:.3f}rad '
                     f'(límite {self.yaw_goal_tolerance:.3f}rad). '
-                    f'{nav_detail}'
+                    f'{diagnosis} {nav_detail}'
                 )
             else:
                 message = (

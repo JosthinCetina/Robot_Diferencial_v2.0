@@ -5,7 +5,7 @@ export default function App() {
   const [connected, setConnected] = useState(false);
   const [pose, setPose] = useState({ x: '0.00', y: '0.00', theta: '0.0' });
   const [navStatus, setNavStatus] = useState('IDLE');
-  const [goal, setGoal] = useState({ x: 1.0, y: 0.0 });
+  const [goal, setGoal] = useState({ x: 1.0, y: 0.0, yawDeg: '' });
   const [scanData, setScanData] = useState([]);
   const [missionState, setMissionState] = useState('SIN MISIÓN');
   const [missionProgress, setMissionProgress] = useState('0 / 0 puntos');
@@ -13,6 +13,7 @@ export default function App() {
   
   const rosRef = useRef(null);
   const canvasRef = useRef(null);
+  const poseRef = useRef({ x: 0, y: 0, yawRad: 0, frameId: '', receivedAt: 0 });
 
   // Paro lógico: solicita cancelar todos los objetivos NavigateToPose y publica Twist cero.
   // No sustituye un E-stop físico cableado ni una función de seguridad certificada.
@@ -48,10 +49,21 @@ export default function App() {
       messageType: 'geometry_msgs/PoseStamped'
     });
     poseSub.subscribe((msg) => {
+      const yawRad = Math.atan2(
+        2 * (msg.pose.orientation.w * msg.pose.orientation.z + msg.pose.orientation.x * msg.pose.orientation.y),
+        1 - 2 * (msg.pose.orientation.y ** 2 + msg.pose.orientation.z ** 2)
+      );
+      poseRef.current = {
+        x: msg.pose.position.x,
+        y: msg.pose.position.y,
+        yawRad,
+        frameId: String(msg.header.frame_id || '').replace('/', ''),
+        receivedAt: Date.now()
+      };
       setPose({
         x: msg.pose.position.x.toFixed(2),
         y: msg.pose.position.y.toFixed(2),
-        theta: (Math.atan2(2 * (msg.pose.orientation.w * msg.pose.orientation.z + msg.pose.orientation.x * msg.pose.orientation.y), 1 - 2 * (msg.pose.orientation.y ** 2 + msg.pose.orientation.z ** 2)) * 180 / Math.PI).toFixed(1)
+        theta: (yawRad * 180 / Math.PI).toFixed(1)
       });
     });
 
@@ -199,25 +211,38 @@ export default function App() {
   };
 
   const sendGoal = () => {
-    if (!rosRef.current) return;
-    
-    // Feedback local inmediato
-    setNavStatus('EN_RUTA: Transmitiendo meta a Nav2...');
-
+    if (!rosRef.current || !connected) { setNavStatus('ERROR: rosbridge no está conectado.'); return; }
+    const targetX = Number(goal.x);
+    const targetY = Number(goal.y);
+    if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) { setNavStatus('ERROR: X e Y deben ser coordenadas numéricas válidas.'); return; }
+    const currentPose = poseRef.current;
+    const yawText = String(goal.yawDeg ?? '').trim();
+    let targetYaw;
+    if (yawText === '') {
+      const poseIsFresh = currentPose.receivedAt > 0 && Date.now() - currentPose.receivedAt <= 2000;
+      if (!poseIsFresh || currentPose.frameId !== 'map') {
+        setNavStatus('ERROR: No hay una pose reciente del robot en frame map para conservar su orientación.');
+        return;
+      }
+      targetYaw = currentPose.yawRad;
+    } else {
+      const yawDegrees = Number(yawText);
+      if (!Number.isFinite(yawDegrees)) { setNavStatus('ERROR: El yaw final debe ser un ángulo numérico en grados.'); return; }
+      targetYaw = yawDegrees * Math.PI / 180.0;
+    }
+    targetYaw = Math.atan2(Math.sin(targetYaw), Math.cos(targetYaw));
+    const halfYaw = targetYaw / 2.0;
+    const targetYawDegrees = targetYaw * 180.0 / Math.PI;
+    setNavStatus('EN_RUTA: Enviando X=' + targetX.toFixed(2) + ', Y=' + targetY.toFixed(2) + ', yaw=' + targetYawDegrees.toFixed(1) + '°...');
     const goalMsg = new ROSLIB.Message({
       header: { frame_id: 'map' },
       pose: {
-        position: { x: parseFloat(goal.x), y: parseFloat(goal.y), z: 0.0 },
-        orientation: { w: 1.0 }
+        position: { x: targetX, y: targetY, z: 0.0 },
+        orientation: { x: 0.0, y: 0.0, z: Math.sin(halfYaw), w: Math.cos(halfYaw) }
       }
     });
-
-    // Enviar SOLO al bridge propio.
-    // Nav2 ya consume /goal_pose internamente; publicar ambos topicos
-    // genera dos solicitudes NavigateToPose para la misma meta.
     const goalTopic = new ROSLIB.Topic({
-      ros: rosRef.current,
-      name: '/dif_bot/web/goal_pose',
+      ros: rosRef.current, name: '/dif_bot/web/goal_pose',
       messageType: 'geometry_msgs/PoseStamped'
     });
     goalTopic.publish(goalMsg);
@@ -287,19 +312,22 @@ export default function App() {
 
           <div style={{ backgroundColor: '#111827', borderRadius: '0.75rem', padding: '1.25rem', border: '1px solid #1f2937' }}>
             <h3 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Misiones de Navegación</h3>
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-              <input 
-                type="number" step="0.1" value={goal.x} 
-                onChange={(e) => setGoal({ ...goal, x: e.target.value })}
-                placeholder="Meta X (m)" 
-                style={{ width: '50%', backgroundColor: '#1f2937', border: '1px solid #374151', color: '#fff', padding: '0.6rem', borderRadius: '0.5rem', outline: 'none' }} 
-              />
-              <input 
-                type="number" step="0.1" value={goal.y} 
-                onChange={(e) => setGoal({ ...goal, y: e.target.value })}
-                placeholder="Meta Y (m)" 
-                style={{ width: '50%', backgroundColor: '#1f2937', border: '1px solid #374151', color: '#fff', padding: '0.6rem', borderRadius: '0.5rem', outline: 'none' }} 
-              />
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <input type="number" step="0.1" value={goal.x}
+                onChange={(e) => setGoal({ ...goal, x: e.target.value })} placeholder="Meta X (m)"
+                style={{ width: '50%', backgroundColor: '#1f2937', border: '1px solid #374151', color: '#fff', padding: '0.6rem', borderRadius: '0.5rem', outline: 'none' }} />
+              <input type="number" step="0.1" value={goal.y}
+                onChange={(e) => setGoal({ ...goal, y: e.target.value })} placeholder="Meta Y (m)"
+                style={{ width: '50%', backgroundColor: '#1f2937', border: '1px solid #374151', color: '#fff', padding: '0.6rem', borderRadius: '0.5rem', outline: 'none' }} />
+            </div>
+            <div style={{ marginBottom: '0.75rem' }}>
+              <input type="number" step="1" value={goal.yawDeg}
+                onChange={(e) => setGoal({ ...goal, yawDeg: e.target.value })}
+                placeholder="Yaw final (grados; vacío = conservar orientación)"
+                style={{ width: '100%', boxSizing: 'border-box', backgroundColor: '#1f2937', border: '1px solid #374151', color: '#fff', padding: '0.6rem', borderRadius: '0.5rem', outline: 'none' }} />
+              <span style={{ display: 'block', marginTop: '0.35rem', color: '#9ca3af', fontSize: '0.7rem' }}>
+                Sin yaw indicado, el robot conserva su orientación al enviar la meta. Ejemplo: 90° apunta hacia +Y.
+              </span>
             </div>
             <button 
               onClick={sendGoal} 

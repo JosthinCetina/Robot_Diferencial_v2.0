@@ -77,6 +77,36 @@ if timeout 2 bash -c '</dev/tcp/127.0.0.1/9090' >/dev/null 2>&1; then ok 'Rosbri
 if curl -fsS --max-time 3 http://127.0.0.1:3000/ >/dev/null 2>&1; then ok 'Web HTTP 3000'; else bad 'Web HTTP 3000'; WEB_FAIL=$((WEB_FAIL+1)); fi
 
 echo
+echo "=================================================="
+echo " DIAGNÓSTICO ESPECÍFICO DE NAVEGACIÓN / ORIENTACIÓN"
+echo "=================================================="
+if check_node /controller_server; then
+  for parameter in \
+    progress_checker.plugin \
+    progress_checker.required_movement_radius \
+    progress_checker.required_movement_angle \
+    progress_checker.movement_time_allowance \
+    goal_checker.xy_goal_tolerance \
+    goal_checker.yaw_goal_tolerance \
+    FollowPath.max_vel_theta \
+    FollowPath.acc_lim_theta \
+    FollowPath.decel_lim_theta \
+    FollowPath.vtheta_samples; do
+    value="$(timeout 3 ros2 param get /controller_server "$parameter" 2>&1 || true)"
+    printf "[NAV2 PARAM] %s = %s\\n" "$parameter" "$value"
+  done
+else
+  echo "[NAV2 PARAM] /controller_server no está disponible; no se consultan parámetros."
+fi
+
+if [[ -s "$WORKSPACE/logs/navigation.log" ]]; then
+  echo "[NAV2 LOG] Eventos recientes de navegación:"
+  grep -Ei 'progress|rotate|controller|abort|failed|error|warning|no valid|oscillat|transform' \
+    "$WORKSPACE/logs/navigation.log" | tail -n 60 || tail -n 40 "$WORKSPACE/logs/navigation.log"
+else
+  echo "[NAV2 LOG] No existe /ros2_ws/logs/navigation.log."
+fi
+
 echo "Correctas=$PASS | Fallidas=$FAIL"
 if (( CORE_FAIL == 0 && WEB_FAIL == 0 && NAV_FAIL == 0 )); then
   echo 'ESTADO: BASE + WEB + NAVEGACIÓN: NODOS Y SERVICIOS DETECTADOS.'

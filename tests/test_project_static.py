@@ -316,3 +316,49 @@ def test_start_script_fails_loudly_when_robot_did_not_spawn():
     assert 'wait_for_ros2_controllers 75' in start
     assert 'joint_state_broadcaster.*active' in start
     assert 'diff_drive_controller.*active' in start
+
+
+def test_nav2_progress_checker_tracks_rotation_at_xy_goal():
+    nav = yaml.safe_load(
+        (ROOT / 'src/dif_bot_navigation/config/nav2_params.yaml').read_text()
+    )
+    controller = nav['controller_server']['ros__parameters']
+    progress = controller['progress_checker']
+    goal = controller['goal_checker']
+    assert progress['plugin'] == 'nav2_controller::PoseProgressChecker'
+    assert progress['required_movement_radius'] == 0.08
+    assert progress['required_movement_angle'] == 0.05
+    assert progress['movement_time_allowance'] >= 20.0
+    assert goal['stateful'] is True
+    assert goal['xy_goal_tolerance'] == 0.05
+    assert goal['yaw_goal_tolerance'] == 0.10
+
+
+def test_xy_only_web_goal_preserves_current_yaw_and_allows_explicit_yaw():
+    app = (ROOT / 'web/src/App.jsx').read_text()
+    assert "yawDeg: ''" in app
+    assert 'currentPose.yawRad' in app
+    assert "currentPose.frameId !== 'map'" in app
+    assert 'Math.sin(halfYaw)' in app
+    assert 'Math.cos(halfYaw)' in app
+    assert 'Yaw final (grados; vacío = conservar orientación)' in app
+    assert 'orientation: { w: 1.0 }' not in app
+
+
+def test_goal_bridge_validates_map_frame_and_normalizes_quaternion():
+    bridge = (
+        ROOT / 'src/dif_bot_web_bridge/dif_bot_web_bridge/goal_bridge.py'
+    ).read_text()
+    assert "if frame_id != 'map'" in bridge
+    assert 'all(math.isfinite(value) for value in coordinates)' in bridge
+    assert 'norm = math.sqrt(' in bridge
+    assert 'q.z /= norm' in bridge
+    assert 'orientación final no se alcanzó' in bridge
+
+
+def test_navigation_diagnostic_reports_progress_checker_and_nav2_errors():
+    diag = (ROOT / 'DIAGNOSTIC_DIF_BOT.sh').read_text()
+    assert 'progress_checker.required_movement_angle' in diag
+    assert 'goal_checker.yaw_goal_tolerance' in diag
+    assert 'navigation.log' in diag
+    assert 'oscillat' in diag.lower()

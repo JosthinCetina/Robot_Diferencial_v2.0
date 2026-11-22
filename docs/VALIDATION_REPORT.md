@@ -3,7 +3,7 @@
 **Corte de revisión:** 22 de noviembre de 2026  
 **Repositorio:** \`JosthinCetina/Robot_Diferencial_v2.0\`  
 **Rama:** \`main\`  
-**Commit base auditado:** \`cd7f751\`; este documento se actualiza junto con el commit de los ajustes técnicos descritos aquí.
+**Commit base auditado:** `208201f`; esta revisión incorpora evidencia del despliegue WSL2 y el incidente de navegación XY/yaw.
 
 Este documento registra el estado de implementación y funcionamiento conocido de los seis componentes técnicos definidos en \`rbtc_proyecto_final_v1.pdf\`. No evalúa video, informe académico ni otros requisitos de entrega.
 
@@ -17,11 +17,11 @@ La arquitectura de software está integrada en seis paquetes ROS 2 y utiliza ROS
 
 | Componente | Implementación en el repositorio | Funcionamiento conocido | Trabajo necesario para aceptación |
 |---|---|---|---|
-| 1. Control diferencial y odometría | Modo Gazebo DiffDrive y modo \`gz_ros2_control\`; adaptadores a \`/cmd_vel\` y \`/odom_raw\`. | **Parcial.** En una sesión anterior se observaron activos los controladores de \`ros2_control\`. La comparación equivalente del modo nativo no está documentada como prueba aprobada. | Ejecutar ambos modos por separado, medir respuesta lineal/angular, frecuencia y error de odometría. |
+| 1. Control diferencial y odometría | Modo Gazebo DiffDrive y modo `gz_ros2_control`; adaptadores a `/cmd_vel` y `/odom_raw`. | **Operativo en modo ros2_control durante el último despliegue.** Gazebo confirmó la inserción del robot, ambos controladores quedaron activos y el usuario confirmó teleoperación funcional. La comparación con modo nativo sigue pendiente. | Medir respuesta lineal/angular, frecuencia y error de odometría en ambos modos por separado. |
 | 2. Fusión EKF | \`ekf.yaml\` integra \`/odom_raw\` y \`/imu/data\`; publica \`/odom_filtered\` y TF \`odom -> base_footprint\`. | **Pendiente de revalidación.** En sesiones anteriores hubo lecturas intermitentes de \`/odom_raw\` y covarianzas anormalmente grandes en \`/odom_filtered\`. Se ajustó la selección de IMU para no fusionar yaw absoluto con covarianza de orientación observada en cero. | Confirmar datos de entrada, covarianzas, ausencia de NaN/Inf y evolución coherente de TF con el robot en movimiento. |
 | 3. Mapeo SLAM | SLAM Toolbox, parámetros asíncronos, lanzamiento y mapa PGM/YAML versionado. | **Parcial.** El mapa existente tiene dimensiones/resolución conocidas. El README lo identifica como heredado; no hay evidencia de que sea una reconstrucción SLAM reciente alineada con el mundo actual. | Ejecutar exploración lenta, guardar mapa nuevo y comparar obstáculos con Gazebo en RViz2. |
 | 4. Localización AMCL | AMCL, Map Server, parámetros de partículas, frame map/odom/base y pose inicial configurada. | **Pendiente de convergencia.** En sesiones previas Map Server y AMCL llegaron a estar activos, pero no se confirmó una pose AMCL estable. | Confirmar \`/amcl_pose\`, nube de partículas y TF \`map -> odom\`; probar pose inicial incorrecta y ruido de LiDAR. |
-| 5. Navegación Nav2 | NavFn, DWB, costmaps global/local, BT Navigator y cuatro comportamientos de recuperación. | **Parcial e inestable.** Se consiguió una meta con error XY cercano a 0,04 m después de ajustar DWB. También se observaron pérdidas de heartbeat de planner/behavior bajo presión elevada de CPU en WSL2. | Mantener servidores lifecycle activos, validar costmaps, evitar obstáculos, completar varias metas y registrar recuperaciones. |
+| 5. Navegación Nav2 | NavFn, DWB, costmaps global/local, BT Navigator y cuatro comportamientos de recuperación. | **Parcial; navegación autónoma con abortos.** Una meta individual quedó a 0,046 m (dentro del límite 0,050 m), pero el error angular fue 0,663 rad (límite 0,100 rad) y Nav2 terminó ABORTED. La UI imponía yaw=0 aunque solo se introdujeran X/Y y el checker de progreso medía solo XY durante la rotación final. Se corrigen con yaw opcional y `PoseProgressChecker`; falta revalidación runtime. | Repetir metas XY sin yaw explícito y metas con yaw solicitado; comprobar giro final, progreso angular, costmaps y ejecución sin abortos. Revisar `navigation.log` para confirmar el mensaje del aborto. |
 | 6. Misiones autónomas | Servidor Python con BasicNavigator, servicio Trigger, YAML de waypoints y tópico de progreso. | **Implementación presente; ejecución integral no demostrada.** El YAML incluye tres puntos. Se añade validación estática de que esos puntos caen en celdas libres y límites temporales para evitar esperas indefinidas. | Ejecutar los tres puntos en orden, confirmar progreso y resultado, y comprobar rechazo de metas fallidas y bloqueo de misiones simultáneas. |
 
 ## Evidencia que ya existe
@@ -50,7 +50,7 @@ La arquitectura de software está integrada en seis paquetes ROS 2 y utiliza ROS
 
 ## Qué significa la validación automática
 
-El workflow \`.github/workflows/static-validation.yml\` comprueba análisis estático, YAML, XML/Xacro/SDF, waypoints en celdas libres, sintaxis Bash y build/test de paquetes con ROS 2 Jazzy.
+El workflow `.github/workflows/static-validation.yml` comprueba análisis estático, YAML, XML/Xacro/SDF, waypoints en celdas libres, sintaxis Bash, compilación del frontend y build/test de paquetes con ROS 2 Jazzy.
 
 Un resultado verde del workflow demuestra que los checks automatizados pasaron; **no demuestra** que Gazebo se haya ejecutado, que el robot se mueva, que AMCL converja, que Nav2 mantenga sus lifecycle bonds bajo carga ni que la misión llegue a los tres objetivos.
 
@@ -64,3 +64,25 @@ La matriz solo se puede marcar completamente en verde después de completar las 
 - El modo nativo Gazebo DiffDrive es una alternativa de simulación, no un segundo hardware interface de \`ros2_control\`.
 - El STOP web es un paro lógico de software. No es un dispositivo E-stop físico ni una función de seguridad certificada.
 - Los waypoints se validan contra celdas libres del mapa versionado, pero la accesibilidad de la ruta y la alineación global del mapa deben verificarse en Gazebo/RViz2.
+
+
+## Evidencia del último despliegue WSL2 (commit 208201f)
+
+El texto de consola compartido el 22 de noviembre confirma:
+
+- `ros_gz_sim/create` publicó `Entity creation successful.`.
+- `joint_state_broadcaster` y `diff_drive_controller` quedaron activos.
+- `colcon build` terminó con 6 paquetes completados.
+- La compilación Vite terminó correctamente; el frontend se abrió en puerto 3000 y rosbridge en 9090.
+- `START_DIF_BOT.sh` inició los procesos base, web y navegación.
+- El usuario confirmó posteriormente que la teleoperación funciona.
+
+El texto de despliegue no incluye `logs/navigation.log`; por tanto no demuestra que AMCL, todos los nodos lifecycle o una navegación autónoma completa hayan quedado estables. También reporta una advertencia rosdep no resuelta para la clave `ament_python` en dos paquetes (el build continuó y terminó) y dos vulnerabilidades npm (una moderada y una alta).
+
+## Diagnóstico del aborto XY/yaw
+
+El puente reportó `error_XY=0.046m`, `error_yaw=0.663rad`, con tolerancias de 0,050 m y 0,100 rad. El robot estaba dentro de la ventana XY, pero fuera de la tolerancia angular; Nav2 no debía declarar la pose completa como alcanzada.
+
+La UI solo solicitaba X/Y, pero generaba un cuaternión identidad (`yaw=0`). Esto forzaba una orientación final no solicitada. Se modifica para conservar el yaw actual cuando no se proporciona y permitir un yaw explícito en grados.
+
+Además, `SimpleProgressChecker` solo considera desplazamiento XY. La llegada a la ventana XY puede requerir rotación en el sitio, que no reinicia su temporizador de progreso. Se reemplaza por `nav2_controller::PoseProgressChecker`, que considera desplazamiento y diferencia angular. La corrección está fundada en el código upstream de Nav2 Jazzy, pero no se marcará como funcional hasta repetir la navegación en Gazebo y revisar `navigation.log`.
