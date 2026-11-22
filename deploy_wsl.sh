@@ -163,34 +163,50 @@ if ! wait_for_port 3000; then
   fail "Despliegue incompleto: no está disponible http://localhost:3000."
 fi
 
-info "Esperando hasta 120 s a que Nav2 exponga /navigate_to_pose..."
+info "Dando tiempo a Nav2 para completar el arranque (máx. 60 s)..."
 NAV2_READY=false
-for _ in {1..60}; do
-  ACTIONS="$(docker exec "$CONTAINER" bash -lc 'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && timeout 6 ros2 action list' 2>/dev/null || true)"
+for _ in {1..20}; do
+  ACTIONS="$(docker exec "$CONTAINER" bash -lc 'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && RCUTILS_COLORIZED_OUTPUT=0 timeout 4 ros2 action list' 2>/dev/null || true)"
   if grep -Fxq '/navigate_to_pose' <<<"$ACTIONS"; then
     NAV2_READY=true
     break
   fi
-  sleep 2
+  sleep 3
 done
 
-mkdir -p "$PROJECT_DIR/logs"
-info "Ejecutando diagnóstico posterior al despliegue..."
+# Capture to a user-writable /tmp file, never to /ros2_ws/logs (root-owned
+# files in the bind mount can make that directory unwritable from WSL).
+DIAG_CAPTURE="$(mktemp "${TMPDIR:-/tmp}/difbot_post_deploy_XXXXXX.log")"
+info "Ejecutando diagnóstico profundo de base, teleoperación y Nav2..."
 set +e
-docker exec "$CONTAINER" bash -lc 'cd /ros2_ws && ./DIAGNOSTIC_DIF_BOT.sh' \
-  > "$PROJECT_DIR/logs/post_deploy_diagnostic.log" 2>&1
+docker exec "$CONTAINER" bash -lc 'cd /ros2_ws && ./DIAGNOSTIC_DIF_BOT.sh' >"$DIAG_CAPTURE" 2>&1
 DIAGNOSTIC_RC=$?
+docker exec "$CONTAINER" bash -lc '
+  echo
+  echo "===== LOGS CRUDOS (últimas 160 líneas) ====="
+  for f in /ros2_ws/logs/base.log /ros2_ws/logs/navigation.log /ros2_ws/logs/web.log; do
+    echo
+    echo "### $f"
+    tail -n 160 "$f" 2>/dev/null || true
+  done
+' >>"$DIAG_CAPTURE" 2>&1
 set -e
+
+# Keep a copy at the deployment root (not the Docker-owned logs directory).
+if [[ -w "$DEPLOY_ROOT" ]]; then
+  cp "$DIAG_CAPTURE" "$DEPLOY_ROOT/post_deploy_diagnostic.log" 2>/dev/null || true
+fi
 
 echo
 echo "===== DIAGNÓSTICO POST-DESPLIEGUE ====="
-tail -n 100 "$PROJECT_DIR/logs/post_deploy_diagnostic.log" || true
-echo "======================================="
+cat "$DIAG_CAPTURE"
+echo "===== FIN DEL DIAGNÓSTICO ====="
+echo "Archivo de diagnóstico: $DIAG_CAPTURE"
 if [[ "$NAV2_READY" != "true" ]]; then
-  warn "Nav2 no expuso /navigate_to_pose dentro del tiempo de espera."
+  warn "Nav2 no expuso /navigate_to_pose dentro de los 60 s. Revisa los errores del log adjunto."
 fi
 if [[ "$DIAGNOSTIC_RC" -ne 0 ]]; then
-  warn "El diagnóstico reportó componentes pendientes (código $DIAGNOSTIC_RC). La base y la interfaz se conservan; revisa logs/post_deploy_diagnostic.log."
+  warn "El diagnóstico detectó fallos (código $DIAGNOSTIC_RC). La base, los logs y la interfaz se conservan."
 fi
 
 echo

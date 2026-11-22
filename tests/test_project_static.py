@@ -366,3 +366,24 @@ def test_navigation_diagnostic_reports_progress_checker_and_nav2_errors():
     assert 'navigation.log' in diag
     assert 'oscillat' in diag.lower()
     assert r'printf "[NAV2 PARAM] %s = %s\n"' in diag
+
+
+def test_runtime_diagnostic_checks_command_chain_localization_and_logs():
+    diagnostic = (ROOT / 'DIAGNOSTIC_DIF_BOT.sh').read_text()
+    for token in (
+        '/cmd_vel_web', '/cmd_vel', '/diff_drive_controller/cmd_vel',
+        '/cmd_vel_nav', 'ros2 topic info -v', 'ros2 control list_controllers',
+        '/amcl_pose', '/odom_filtered', 'ros2 lifecycle get',
+        'navigation.log', 'base.log', 'web.log'
+    ):
+        assert token in diagnostic
+
+
+def test_wsl_deployer_captures_diagnostics_outside_root_owned_logs_directory():
+    deploy = (ROOT / 'deploy_wsl.sh').read_text()
+    assert 'mktemp' in deploy
+    assert 'difbot_post_deploy_' in deploy
+    assert 'post_deploy_diagnostic.log' in deploy
+    assert 'cat "$DIAG_CAPTURE"' in deploy
+    assert 'logs/post_deploy_diagnostic.log' not in deploy
+    assert 'tail -n 160 "$f"' in deploy
