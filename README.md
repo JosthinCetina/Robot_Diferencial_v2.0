@@ -1,115 +1,133 @@
 # dif_bot OS v2.0 — ROS 2 Jazzy + Gazebo Harmonic
 
-Proyecto de robot diferencial simulado: control `ros2_control`, modo nativo Gazebo, EKF, Nav2, misiones secuenciales y panel web. El entorno se separa en una imagen y un volumen Docker dedicados a este proyecto.
+Proyecto de robot diferencial simulado con control dual, fusión sensorial, SLAM, AMCL, Nav2, misiones secuenciales y panel web. El entorno se separa en una imagen Docker y un volumen persistente dedicados al proyecto.
+
+Repositorio de desarrollo: **[JosthinCetina/Robot_Diferencial_v2.0](https://github.com/JosthinCetina/Robot_Diferencial_v2.0)**.
 
 ## Arquitectura
 
-- **ROS 2 Jazzy / Ubuntu 24.04 / Gazebo Harmonic**.
-- Gazebo Sim y `ros_gz_bridge`: sensores `/scan`, `/imu/data`, `/camera/image`.
-- **Modo control principal** (`use_ros2_control:=true`): URDF `<ros2_control>`, `gz_ros2_control/GazeboSimSystem`, `controller_manager`, `joint_state_broadcaster` y `diff_drive_controller`.
-- **Modo comparativo** (`use_ros2_control:=false`): plugin `gz-sim-diff-drive-system` nativo de Gazebo Sim, sin `ros2_control`.
-- Ambos modos normalizan el mando en `/cmd_vel` y odometría bruta en `/odom_raw`. El EKF publica `/odom_filtered` y la única TF `odom -> base_footprint`.
-- `twist_mux` arbitra teclado/web/control de pose/Nav2 con prioridad y timeout.
-- Nav2 Jazzy (AMCL, NavFn, DWB, behavior server), SLAM Toolbox y una misión Python con waypoints secuenciales.
-- React/Vite/roslibjs vía rosbridge WebSocket `9090`; UI en `3000`.
+- ROS 2 Jazzy / Ubuntu 24.04 / Gazebo Harmonic.
+- Gazebo Sim y \`ros_gz_bridge\`: sensores \`/scan\`, \`/imu/data\`, \`/camera/image\`.
+- Modo principal (\`use_ros2_control:=true\`): URDF \`<ros2_control>\`, \`gz_ros2_control/GazeboSimSystem\`, \`controller_manager\`, \`joint_state_broadcaster\` y \`diff_drive_controller\`.
+- Modo comparativo (\`use_ros2_control:=false\`): plugin DiffDrive nativo de Gazebo Sim, sin \`ros2_control\`.
+- Ambos modos normalizan la odometría bruta en \`/odom_raw\`; el EKF publica \`/odom_filtered\` y la única TF \`odom -> base_footprint\`.
+- \`twist_mux\` arbitra teclado/web/control de pose/Nav2 con prioridades y timeout.
+- Nav2: AMCL, NavFn, DWB y Behavior Server; SLAM Toolbox para generar mapas.
+- Misión Python mediante \`nav2_simple_commander\`, servicio \`/start_autonomous_mission\` y waypoints YAML.
+- React/Vite/roslibjs vía rosbridge WebSocket \`9090\`; interfaz web en \`3000\`.
 
-## 1. Crear el repositorio GitHub nuevo
+## 1. Actualizar el repositorio existente
 
-Extrae el ZIP, abre WSL2 en la carpeta `dif_bot_os_jazzy` y autentica GitHub CLI una sola vez:
+Este proyecto ya está asociado a \`JosthinCetina/Robot_Diferencial_v2.0\`. **No se debe crear un repositorio nuevo** para publicar sus actualizaciones.
 
-```bash
-sudo apt update && sudo apt install -y gh git
-gh auth login
-```
+En la raíz del repositorio, después de revisar los cambios locales:
 
-Crea el repositorio automáticamente, genera el commit y publica `main` con un único comando:
+\`\`\`bash
+./scripts/publish_github.sh --dry-run
+./scripts/publish_github.sh
+\`\`\`
 
-```bash
-./scripts/publish_github.sh public
-```
+El script valida el remoto y la rama \`main\`, comprueba que el historial local incluya el último commit remoto, respeta \`.gitignore\`, valida el diff y publica en el repositorio existente. Nunca crea otro repositorio ni sobrescribe el historial remoto.
 
-El script crea `dif_bot_os_jazzy` en la cuenta autenticada. Para mantenerlo privado, usa `./scripts/publish_github.sh private`; para ese modo, sigue el flujo de clonación privada más abajo. No incluyas tokens en URLs ni dentro del repositorio. Revisa los campos `maintainer` de los seis `package.xml` y reemplaza el correo genérico antes de presentar o publicar el proyecto formalmente.
+No incluyas tokens, claves, archivos \`.env\`, bolsas ROS ni logs en Git. \`.gitignore\` excluye artefactos de ejecución y diagnósticos locales.
 
-También puedes crear un repositorio vacío desde <https://github.com/new> y usar Git manualmente, si prefieres no instalar GitHub CLI.
+## 2. Descargarlo y ejecutarlo en Docker
 
-## 2. Descargarlo y ejecutarlo en el Docker dedicado
+Para clonar el repositorio público en WSL2 desde una carpeta que contenga \`docker-clone-run.sh\`:
 
-Para un repositorio público, desde la carpeta local que contiene `docker-clone-run.sh`, ejecuta:
+\`\`\`bash
+./docker-clone-run.sh https://github.com/JosthinCetina/Robot_Diferencial_v2.0.git main
+\`\`\`
 
-```bash
-./docker-clone-run.sh https://github.com/<USUARIO>/dif_bot_os_jazzy.git main
-```
+El script construye la imagen \`dif-bot-os:jazzy\`, crea el volumen persistente \`difbot_jazzy_ws\`, clona el repositorio dentro de \`/ros2_ws\` y abre el contenedor \`dif-bot-os-jazzy\`. El volumen conserva el workspace al cerrar el contenedor. Al volver a ejecutar el script, se actualiza \`main\` mediante \`git pull --ff-only\`.
 
-El script construye la imagen `dif-bot-os:jazzy` usando el `Dockerfile` del repositorio remoto, crea el volumen persistente `difbot_jazzy_ws`, clona el repositorio dentro de `/ros2_ws` y abre el contenedor `dif-bot-os-jazzy`. Al salir del contenedor, el volumen conserva el repositorio; al volver a ejecutar el script, actualiza `main` con `git pull --ff-only`.
+Para un checkout local existente, usa \`docker-build.sh\` y \`docker-run.sh\`. No borres el volumen persistente si quieres conservar el workspace.
 
-**Para un repositorio privado:** autentica y clona primero en WSL2 con Git Credential Manager. Luego entra en la carpeta clonada y ejecuta `./docker-build.sh` seguido de `./docker-run.sh`. En este modo Docker monta el repositorio local en `/ros2_ws`, sin guardar credenciales dentro de la imagen ni exponer el token en una URL.
+El entorno usa \`ROS_DOMAIN_ID=42\` por defecto para aislar el tráfico DDS. La interfaz gráfica de Gazebo depende de que Docker Desktop/WSL2 tenga acceso gráfico funcional; para depurar el comportamiento de ROS, RViz y Nav2 se debe priorizar un entorno con carga de CPU controlada.
 
-El script configura el acceso gráfico de WSLg y `/dev/dri` cuando están disponibles. También usa `ROS_DOMAIN_ID=42` por defecto para aislar el tráfico DDS de otros proyectos ROS; puedes sobrescribirlo definiendo `ROS_DOMAIN_ID` antes de ejecutar el script. La GUI depende de que Docker Desktop/WSL2 tenga acceso gráfico funcional; la compilación y las pruebas sin GUI pueden realizarse igualmente.
-
-## 3. Instalar dependencias del workspace y compilar
+## 3. Instalar dependencias y compilar
 
 Dentro del contenedor:
 
-```bash
+\`\`\`bash
 cd /ros2_ws
 source /opt/ros/jazzy/setup.bash
 rosdep update
 rosdep install --from-paths src --ignore-src -r -y --rosdistro jazzy
 MAKEFLAGS="-j1" colcon build --symlink-install --executor sequential --event-handlers console_direct+
 source install/setup.bash
-```
+\`\`\`
+
+Los seis paquetes propios son \`dif_bot_bringup\`, \`dif_bot_control\`, \`dif_bot_description\`, \`dif_bot_gazebo\`, \`dif_bot_navigation\` y \`dif_bot_web_bridge\`.
 
 ## 4. Levantar el sistema
 
-Modo recomendado con `ros2_control`:
+Modo recomendado con \`ros2_control\`:
 
-```bash
-ros2 launch dif_bot_bringup main.launch.py use_sim_time:=true use_ros2_control:=true launch_navigation:=true
-```
+\`\`\`bash
+./START_DIF_BOT.sh
+\`\`\`
 
-Modo nativo para comparar:
+Este script inicia por separado la base Gazebo/ROS, la interfaz web y el proceso de navegación. Los logs quedan separados en \`/ros2_ws/logs/base.log\`, \`navigation.log\` y \`web.log\`.
 
-```bash
-ros2 launch dif_bot_bringup main.launch.py use_sim_time:=true use_ros2_control:=false launch_navigation:=true
-```
+Abre \`http://localhost:3000\`; rosbridge usa \`ws://localhost:9090\`. Para detener todos los procesos gestionados:
 
-Ejecuta un solo modo a la vez. Para levantar solo el robot/sensores/control, sin Nav2, añade `launch_navigation:=false`.
+\`\`\`bash
+./STOP_DIF_BOT.sh
+\`\`\`
 
-En otro terminal del mismo contenedor:
+Para comparar el modo nativo, detén el sistema y arranca la base con \`use_ros2_control:=false\`; no ejecutes ambos controladores al mismo tiempo. El lanzamiento directo de referencia es:
 
-```bash
-source /opt/ros/jazzy/setup.bash
-source /ros2_ws/install/setup.bash
-cd /ros2_ws/web
-npm ci
-npm run dev -- --host 0.0.0.0
-```
+\`\`\`bash
+ros2 launch dif_bot_bringup main.launch.py use_sim_time:=true use_ros2_control:=false launch_navigation:=false
+\`\`\`
 
-Abre `http://localhost:3000`. La UI requiere rosbridge en `ws://localhost:9090`. Para actualizar/crear un mapa desde SLAM, arranca `main.launch.py launch_navigation:=false` y luego ejecuta en terminales separadas `ros2 launch dif_bot_navigation ekf.launch.py use_sim_time:=true` y `ros2 launch dif_bot_navigation slam.launch.py use_sim_time:=true`; no ejecutes AMCL y SLAM simultáneamente.
+## 5. Mapa, SLAM y waypoints
 
-## 5. Configurar mapa y waypoints
+SLAM Toolbox se lanza por separado y no debe ejecutarse simultáneamente con AMCL:
 
-El mapa heredado tiene 197×197 celdas a 0.05 m/resolución (extensión aproximada de 9.85×9.85 m) y el mundo Gazebo tiene un recinto de dimensiones interiores cercanas a 9.8×9.8 m: sus escalas son compatibles como punto de partida, pero eso no demuestra que el contorno de obstáculos esté alineado píxel a píxel. Antes de usar Nav2, compara `/map` con el mundo en RViz2 y verifica la pose AMCL inicial (0,0,0). Si las paredes no coinciden, vuelve a mapear con SLAM Toolbox y reemplaza ambos archivos de mapa. Los puntos de `config/waypoints.yaml` son ejemplos: confirma que cada coordenada cae en una celda libre y que Nav2 puede alcanzarla.
+\`\`\`bash
+ros2 launch dif_bot_bringup main.launch.py use_sim_time:=true launch_navigation:=false
+ros2 launch dif_bot_navigation ekf.launch.py use_sim_time:=true
+ros2 launch dif_bot_navigation slam.launch.py use_sim_time:=true
+\`\`\`
 
-## 6. Pruebas de aceptación
+Después de explorar el mundo con velocidades reducidas, guarda el mapa en \`src/dif_bot_navigation/maps/\` y actualiza \`my_map.yaml\` para apuntar al mapa generado.
 
-Sigue, en orden, `docs/TEST_PLAN_JAZZY.md`. No declares lista la integración hasta verificar controladores activos, sensores, TF, EKF, movimiento/parada, SLAM/AMCL, navegación individual, misión, WebSocket y comparación de ambos modos. Las pruebas estáticas son:
+El mapa versionado actualmente tiene 197 × 197 celdas a 0,05 m/resolución y origen aproximado \`[-4.93, -4.94, 0]\`. Las pruebas estáticas comprueban que la pose inicial (0,0) y los tres waypoints incluidos en \`config/waypoints.yaml\` caen en celdas libres de ese archivo. Esta comprobación **no sustituye** la alineación visual del mapa con el mundo Gazebo en RViz2 ni demuestra que las rutas sean transitables.
 
-```bash
+Los waypoints son puntos de ejemplo que deben volver a comprobarse cada vez que se sustituya el mapa.
+
+## 6. Validación automática y pruebas funcionales
+
+Cada push a \`main\` y cada pull request ejecuta:
+
+- Pruebas estáticas de Python, XML/Xacro/SDF, YAML, conexión entre tópicos y servicio de misión.
+- Comprobación de ocupación de las celdas correspondientes a la pose inicial y waypoints.
+- Sintaxis de scripts Bash.
+- Build y pruebas de los seis paquetes ROS 2 sobre Jazzy mediante \`colcon\`.
+
+La automatización de GitHub valida código, dependencias y compilación; **no ejecuta Gazebo, no comprueba movimiento físico-simulado y no certifica la convergencia de AMCL ni el éxito de una misión**. Para eso se debe ejecutar el plan de integración de \`docs/TEST_PLAN_JAZZY.md\` dentro del contenedor.
+
+Comprobaciones manuales locales:
+
+\`\`\`bash
 python3 -m pytest -q tests
-bash -n docker-build.sh docker-run.sh docker-clone-run.sh scripts/*.sh
-```
+bash -n START_DIF_BOT.sh STOP_DIF_BOT.sh DIAGNOSTIC_DIF_BOT.sh scripts/*.sh
+\`\`\`
 
-## 7. Alcance y límites
+## 7. Seguridad y límites del sistema
 
-- Se integró el framework `ros2_control` específicamente para simulación con `gz_ros2_control`; para hardware físico se necesita implementar un `hardware_interface` compatible con los motores, encoders y drivers reales.
-- El modo `false` es control diferencial nativo de Gazebo Sim, no una segunda forma de `ros2_control`.
-- El botón STOP de la interfaz llama a `/dif_bot/stop`, solicita cancelar todos los objetivos `NavigateToPose` y publica velocidades cero en las entradas de mando manual/web; es un paro lógico que depende de ROS, el mux, el controlador y la comunicación. No es un dispositivo E-stop físico ni una función de seguridad certificada. Para hardware real debe instalarse un paro de emergencia cableado e independiente.
-- El código y configuraciones han pasado verificaciones estáticas descritas en el informe de entrega. El workflow `.github/workflows/static-validation.yml` repite las pruebas Python/configuración y sintaxis shell en cada push y pull request a `main`. Este entorno de generación no tiene Docker, ROS 2 ni Gazebo instalados; por eso no se declara probado el arranque, el control físico-simulado ni Nav2 hasta ejecutar el plan de integración dentro de tu contenedor.
+- \`gz_ros2_control\` está integrado para simulación. Un robot físico requiere un \`hardware_interface\` compatible con sus motores, encoders y drivers.
+- El modo \`false\` es DiffDrive nativo de Gazebo Sim, no una segunda implementación de \`ros2_control\`.
+- El botón STOP llama a \`/dif_bot/stop\`, solicita cancelar los objetivos \`NavigateToPose\` y publica velocidades cero en las entradas manuales/web del mux. **No es un dispositivo E-stop físico ni una función de seguridad certificada.** En hardware real debe existir un paro de emergencia cableado e independiente.
+- Las configuraciones de covarianza del EKF deben ajustarse usando mensajes y datos registrados; una prueba estática no demuestra precisión estadística.
+- El ciclo de vida Nav2 usa un margen de heartbeat de 15 s para tolerar pausas de planificación en WSL2. Esto no corrige falta de CPU ni errores de los servidores.
 
-## Referencias técnicas oficiales
+## Referencias técnicas
 
 - [ROS 2 Control — Jazzy](https://control.ros.org/jazzy/doc/getting_started/getting_started.html) y [gz_ros2_control — Jazzy](https://control.ros.org/jazzy/doc/gz_ros2_control/doc/index.html).
 - [diff_drive_controller — Jazzy](https://control.ros.org/jazzy/doc/ros2_controllers/diff_drive_controller/doc/userdoc.html).
+- [Nav2 Simple Commander — Jazzy](https://github.com/ros-navigation/navigation2/tree/jazzy/nav2_simple_commander).
 - [Nav2 Behavior Server — Jazzy](https://docs.nav2.org/jazzy/configuration_and_development/configuration_guide/core_servers/configuring_behavior_server/).
-- [Gazebo Sim 8 — DiffDrive](https://gazebosim.org/api/sim/8/classgz_1_1sim_1_1systems_1_1DiffDrive.html) y [ros_gz_bridge](https://github.com/gazebosim/ros_gz/blob/ros2/ros_gz_bridge/README.md).
+- [Gazebo Sim DiffDrive — Gazebo Sim 8](https://gazebosim.org/api/sim/8/classgz_1_1sim_1_1systems_1_1DiffDrive.html).

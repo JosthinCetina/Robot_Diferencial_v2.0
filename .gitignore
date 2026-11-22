@@ -1,0 +1,40 @@
+# ROS 2 / colcon output
+/build/
+/install/
+/log/
+/logs/
+
+# Local diagnostics, backups and runtime captures
+/diagnostics/
+/backups/
+*.bak
+*.bak_*
+*.log
+*.bag
+*.db3
+*.mcap
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Web dependencies and build output
+/web/node_modules/
+/web/dist/
+/web/.vite/
+
+# Local secrets and machine-specific settings
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

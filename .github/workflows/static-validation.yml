@@ -1,0 +1,55 @@
+name: DIF_BOT OS - ROS 2 Jazzy validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: Static checks and map/waypoint validation
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pytest PyYAML
+
+      - name: Run project tests
+        run: python3 -m pytest -q tests
+
+      - name: Check Bash syntax
+        run: |
+          bash -n START_DIF_BOT.sh STOP_DIF_BOT.sh DIAGNOSTIC_DIF_BOT.sh
+          bash -n scripts/*.sh
+          bash -n start_system.sh docker-build.sh docker-run.sh docker-clone-run.sh
+
+  ros2-build:
+    name: Build and test ROS 2 Jazzy packages
+    runs-on: ubuntu-latest
+    container:
+      image: rostooling/setup-ros-docker:ubuntu-noble-latest
+    steps:
+      - name: Build and test all project packages
+        uses: ros-tooling/action-ros-ci@v0.4
+        with:
+          package-name: dif_bot_bringup dif_bot_control dif_bot_description dif_bot_gazebo dif_bot_navigation dif_bot_web_bridge
+          target-ros2-distro: jazzy
+          colcon-defaults: |
+            {
+              "build": {
+                "executor": "sequential",
+                "event-handlers": ["console_direct+"]
+              }
+            }

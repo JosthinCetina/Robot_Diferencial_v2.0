@@ -1,6 +1,5 @@
 # dif_bot OS v2.0 - EKF planar (robot_localization)
-# Wheel odometry input is normalized to /odom_raw in both drive modes.
-# Tune covariances from observed messages before claiming quantitative accuracy.
+# Wheel odometry is normalized to /odom_raw in both drive modes.
 ekf_filter_node:
   ros__parameters:
     frequency: 30.0
@@ -16,8 +15,8 @@ ekf_filter_node:
     base_link_frame: base_footprint
     world_frame: odom
 
-    # Wheel odometry: use forward velocity and yaw rate; do not fuse
-    # wheel-integrated pose and velocity simultaneously (correlated estimates).
+    # Wheel odometry: forward velocity and yaw rate.
+    # Do not fuse the wheel-integrated pose and velocity simultaneously.
     odom0: /odom_raw
     odom0_config: [false, false, false,
                    false, false, false,
@@ -28,19 +27,21 @@ ekf_filter_node:
     odom0_differential: false
     odom0_relative: false
 
-    # Gazebo IMU mounted at imu_link. Fuse yaw and angular velocity Z only.
+    # The simulated IMU was observed publishing zero orientation covariance.
+    # Avoid treating that yaw as a high-confidence absolute measurement.
+    # Fuse gyro Z; wheel odometry and gyro jointly constrain heading rate.
     imu0: /imu/data
     imu0_config: [false, false, false,
-                  false, false, true,
+                  false, false, false,
                   false, false, false,
                   false, false, true,
                   false, false, false]
     imu0_queue_size: 20
     imu0_differential: false
-    imu0_relative: true
+    imu0_relative: false
     imu0_remove_gravitational_acceleration: false
 
-    # Conservative initial process noise; tune after inspecting bagged data.
+    # Initial process-noise covariance. Re-tune against recorded bag data.
     process_noise_covariance: [0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                                0.0, 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                                0.0, 0.0, 0.06, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
