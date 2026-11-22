@@ -93,7 +93,7 @@ if check_node /controller_server; then
     FollowPath.decel_lim_theta \
     FollowPath.vtheta_samples; do
     value="$(timeout 3 ros2 param get /controller_server "$parameter" 2>&1 || true)"
-    printf "[NAV2 PARAM] %s = %s\\n" "$parameter" "$value"
+    printf "[NAV2 PARAM] %s = %s\n" "$parameter" "$value"
   done
 else
   echo "[NAV2 PARAM] /controller_server no está disponible; no se consultan parámetros."

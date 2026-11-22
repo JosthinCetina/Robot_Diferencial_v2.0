@@ -362,3 +362,4 @@ def test_navigation_diagnostic_reports_progress_checker_and_nav2_errors():
     assert 'goal_checker.yaw_goal_tolerance' in diag
     assert 'navigation.log' in diag
     assert 'oscillat' in diag.lower()
+    assert r'printf "[NAV2 PARAM] %s = %s\n"' in diag
