@@ -130,13 +130,15 @@ if timeout 2 bash -c '</dev/tcp/127.0.0.1/9090' >/dev/null 2>&1; then ok "TCP ro
 if curl -fsS --max-time 3 http://127.0.0.1:3000/ >/dev/null 2>&1; then ok "HTTP web 3000"; else bad "HTTP web 3000"; fi
 
 echo
+# Runtime files: /ros2_ws/logs/base.log, /ros2_ws/logs/navigation.log, /ros2_ws/logs/web.log.
+# Include progress/oscillation diagnostics as well as controller and lifecycle faults.
 echo "----- LOGS RECIENTES -----"
 for name in base navigation web; do
   file="$WORKSPACE/logs/$name.log"
   echo
   echo "### $file"
   if [[ -s "$file" ]]; then
-    grep -Ei 'error|fatal|exception|abort|failed|not active|lifecycle|bond|timeout|transform|costmap|progress|controller|cmd_vel|serial|disconnect' "$file" | tail -n 100 || tail -n 60 "$file"
+    grep -Ei 'error|fatal|exception|abort|failed|not active|lifecycle|bond|timeout|transform|costmap|progress|oscillat|controller|cmd_vel|serial|disconnect' "$file" | tail -n 100 || tail -n 60 "$file"
     echo "--- últimas 35 líneas completas ---"
     tail -n 35 "$file"
   else
