@@ -74,8 +74,8 @@ elif [[ -f "$IMAGE_STAMP" && "$(cat "$IMAGE_STAMP")" == "$DOCKERFILE_HASH" ]] \
 else
   info "Construyendo imagen Docker $IMAGE desde el checkout WSL..."
   docker build -t "$IMAGE" "$PROJECT_DIR"
+  printf '%s\\n' "$DOCKERFILE_HASH" > "$IMAGE_STAMP"
 fi
-printf '%s\\n' "$DOCKERFILE_HASH" > "$IMAGE_STAMP"
 
 # Reuse the existing named volume as a preserved backup; this deployment uses a
 # bind mount of the WSL checkout so the complete project remains visible/editable in WSL.
