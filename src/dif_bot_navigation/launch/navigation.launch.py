@@ -9,7 +9,6 @@ from ament_index_python.packages import get_package_share_directory
 def generate_launch_description():
     share = get_package_share_directory('dif_bot_navigation')
     params = LaunchConfiguration('params_file')
-    map_yaml = LaunchConfiguration('map')
     ekf_yaml = LaunchConfiguration('ekf_params_file')
     waypoints = LaunchConfiguration('waypoints_file')
     use_sim_time = LaunchConfiguration('use_sim_time')
@@ -20,7 +19,6 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='true'),
         DeclareLaunchArgument('autostart', default_value='true'),
-        DeclareLaunchArgument('map', default_value=os.path.join(share, 'maps', 'my_map.yaml')),
         DeclareLaunchArgument('params_file', default_value=os.path.join(share, 'config', 'nav2_params.yaml')),
         DeclareLaunchArgument('ekf_params_file', default_value=os.path.join(share, 'config', 'ekf.yaml')),
         DeclareLaunchArgument('waypoints_file', default_value=os.path.join(share, 'config', 'waypoints.yaml')),
@@ -31,7 +29,7 @@ def generate_launch_description():
         Node(package='dif_bot_navigation', executable='mission_server', name='autonomous_mission_server',
              output='screen', parameters=[{'use_sim_time': use_sim_time, 'waypoints_file': waypoints}]),
         Node(package='nav2_map_server', executable='map_server', name='map_server', output='screen',
-             parameters=[params, {'yaml_filename': map_yaml, 'use_sim_time': use_sim_time}]),
+             parameters=[params, {'use_sim_time': use_sim_time}]),
         Node(package='nav2_amcl', executable='amcl', name='amcl', output='screen', parameters=[params]),
         Node(package='nav2_controller', executable='controller_server', name='controller_server', output='screen',
              parameters=[params], remappings=[('cmd_vel', '/cmd_vel_nav')]),

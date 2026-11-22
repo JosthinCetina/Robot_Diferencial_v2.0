@@ -24,7 +24,7 @@ export default function App() {
       serviceType: 'std_srvs/Trigger'
     });
     stopService.callService(new ROSLIB.ServiceRequest({}), (response) => {
-      setNavStatus(response.success ? 'PARO LÓGICO SOLICITADO' : `PARO NO CONFIRMADO: ${response.message}`);
+      if (!response.success) setNavStatus(`PARO NO CONFIRMADO: ${response.message}`);
     }, (error) => {
       setNavStatus(`ERROR AL SOLICITAR PARO: ${error}`);
     });
@@ -65,10 +65,7 @@ export default function App() {
       const status = msg.data;
       setNavStatus(status);
       
-      // Detención automática al completar o abortar
-      if (status.includes('SUCCEEDED') || status.includes('ABORTED') || status.includes('ÉXITO')) {
-        forceStopRobot();
-      }
+
     });
 
     // Suscripción a LiDAR 2D
@@ -215,20 +212,15 @@ export default function App() {
       }
     });
 
-    // Publicación dual
-    const goalTopic1 = new ROSLIB.Topic({
-      ros: rosRef.current,
-      name: '/goal_pose',
-      messageType: 'geometry_msgs/PoseStamped'
-    });
-    goalTopic1.publish(goalMsg);
-
-    const goalTopic2 = new ROSLIB.Topic({
+    // Enviar SOLO al bridge propio.
+    // Nav2 ya consume /goal_pose internamente; publicar ambos topicos
+    // genera dos solicitudes NavigateToPose para la misma meta.
+    const goalTopic = new ROSLIB.Topic({
       ros: rosRef.current,
       name: '/dif_bot/web/goal_pose',
       messageType: 'geometry_msgs/PoseStamped'
     });
-    goalTopic2.publish(goalMsg);
+    goalTopic.publish(goalMsg);
   };
 
   return (

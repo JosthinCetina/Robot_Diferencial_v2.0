@@ -1,6 +1,7 @@
 import os
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, TimerAction
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, TimerAction, RegisterEventHandler
+from launch.event_handlers import OnProcessExit
 from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.actions import Node
@@ -40,6 +41,11 @@ def generate_launch_description():
     diff_spawner = Node(package='controller_manager', executable='spawner',
         arguments=['diff_drive_controller', '--controller-manager', '/controller_manager'], output='screen')
 
+    # Cargar el controlador diferencial solo después de activar el broadcaster.
+    controller_spawner_sequence = RegisterEventHandler(
+        OnProcessExit(target_action=jsb_spawner, on_exit=[diff_spawner])
+    )
+
     native_bridge = Node(package='ros_gz_bridge', executable='parameter_bridge',
         arguments=[
             '/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
@@ -53,6 +59,7 @@ def generate_launch_description():
             description='true: gz_ros2_control + diff_drive_controller; false: Gazebo Sim DiffDrive system'),
         gz, rsp,
         TimerAction(period=6.0, actions=[create, sensor_bridge]),
-        TimerAction(period=7.0, actions=[jsb_spawner, diff_spawner], condition=IfCondition(use_ros2_control)),
+        TimerAction(period=7.0, actions=[jsb_spawner], condition=IfCondition(use_ros2_control)),
+        controller_spawner_sequence,
         native_bridge,
     ])
