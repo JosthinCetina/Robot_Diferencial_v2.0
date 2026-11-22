@@ -61,8 +61,21 @@ cd "$PROJECT_DIR"
 info "Commit descargado:"
 git log -1 --oneline
 
-info "Construyendo imagen Docker $IMAGE desde el checkout WSL..."
-docker build -t "$IMAGE" "$PROJECT_DIR"
+DOCKERFILE_HASH="$(sha256sum "$PROJECT_DIR/Dockerfile")"
+DOCKERFILE_HASH="${DOCKERFILE_HASH%% *}"
+IMAGE_STAMP="$DEPLOY_ROOT/.difbot-os-image-dockerfile.sha256"
+
+if [[ "${DIFBOT_SKIP_IMAGE_BUILD:-false}" == "true" ]]; then
+  docker image inspect "$IMAGE" >/dev/null 2>&1 || fail "Se solicitó reutilizar $IMAGE, pero la imagen no existe."
+  warn "Se reutiliza la imagen existente $IMAGE por solicitud explícita."
+elif [[ -f "$IMAGE_STAMP" && "$(cat "$IMAGE_STAMP")" == "$DOCKERFILE_HASH" ]] \
+  && docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  info "Dockerfile sin cambios; se reutiliza la imagen $IMAGE."
+else
+  info "Construyendo imagen Docker $IMAGE desde el checkout WSL..."
+  docker build -t "$IMAGE" "$PROJECT_DIR"
+fi
+printf '%s\\n' "$DOCKERFILE_HASH" > "$IMAGE_STAMP"
 
 # Reuse the existing named volume as a preserved backup; this deployment uses a
 # bind mount of the WSL checkout so the complete project remains visible/editable in WSL.
@@ -119,7 +132,8 @@ docker exec "$CONTAINER" bash -lc '
   MAKEFLAGS="-j1" colcon build --symlink-install --executor sequential --event-handlers console_direct+
   source /ros2_ws/install/setup.bash
   cd /ros2_ws/web
-  LOCK_HASH="$(sha256sum package-lock.json | awk '{print $1}')"
+  LOCK_HASH="$(sha256sum package-lock.json)"
+  LOCK_HASH="${LOCK_HASH%% *}"
   LOCK_MARKER="node_modules/.difbot-package-lock.sha256"
   if [[ ! -x node_modules/.bin/vite || ! -f "$LOCK_MARKER" || "$(cat "$LOCK_MARKER" 2>/dev/null || true)" != "$LOCK_HASH" ]]; then
     npm ci
