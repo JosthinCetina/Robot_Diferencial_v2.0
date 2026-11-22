@@ -14,10 +14,13 @@ export default function App() {
   const rosRef = useRef(null);
   const canvasRef = useRef(null);
   const poseRef = useRef({ x: 0, y: 0, yawRad: 0, frameId: '', receivedAt: 0 });
+  const cmdVelTopicRef = useRef(null);
+  const teleopTimerRef = useRef(null);
 
   // Paro lógico: solicita cancelar todos los objetivos NavigateToPose y publica Twist cero.
   // No sustituye un E-stop físico cableado ni una función de seguridad certificada.
   const forceStopRobot = () => {
+    stopTeleop();
     if (!rosRef.current) return;
     const stopService = new ROSLIB.Service({
       ros: rosRef.current,
@@ -38,7 +41,13 @@ export default function App() {
 
     ros.on('connection', () => setConnected(true));
     ros.on('error', () => setConnected(false));
-    ros.on('close', () => setConnected(false));
+    ros.on('close', () => {
+      setConnected(false);
+      if (teleopTimerRef.current !== null) {
+        window.clearInterval(teleopTimerRef.current);
+        teleopTimerRef.current = null;
+      }
+    });
 
     rosRef.current = ros;
 
@@ -98,25 +107,39 @@ export default function App() {
       if (['MISION_COMPLETADA', 'FALLIDA', 'ERROR'].includes(fields[0])) setMissionBusy(false);
     });
 
-    // Eventos de teclado (W, A, S, D, Espacio, K)
+    // Keyboard teleoperation uses a dead-man command: publish while held,
+    // and publish zero immediately on release or when the window loses focus.
     const handleKeyDown = (e) => {
-      if (e.target.tagName === 'INPUT') return;
-      if (e.key === ' ' || e.key.toLowerCase() === 'k') {
+      if (e.target.tagName === 'INPUT' || e.target.isContentEditable) return;
+      const key = e.key.toLowerCase();
+      if (['w', 'a', 's', 'd'].includes(key)) {
+        if (e.repeat) return;
+        e.preventDefault();
+        if (key === 'w') startTeleop(0.2, 0.0);
+        if (key === 's') startTeleop(-0.2, 0.0);
+        if (key === 'a') startTeleop(0.0, 0.5);
+        if (key === 'd') startTeleop(0.0, -0.5);
+      } else if (e.key === ' ' || key === 'k') {
+        e.preventDefault();
         forceStopRobot();
-      } else if (e.key.toLowerCase() === 'w') {
-        sendTwist(0.2, 0.0);
-      } else if (e.key.toLowerCase() === 's') {
-        sendTwist(-0.2, 0.0);
-      } else if (e.key.toLowerCase() === 'a') {
-        sendTwist(0.0, 0.5);
-      } else if (e.key.toLowerCase() === 'd') {
-        sendTwist(0.0, -0.5);
       }
     };
+    const handleKeyUp = (e) => {
+      if (['w', 'a', 's', 'd'].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+        stopTeleop();
+      }
+    };
+    const handleWindowBlur = () => stopTeleop();
 
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleWindowBlur);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleWindowBlur);
+      stopTeleop();
       poseSub.unsubscribe(); statusSub.unsubscribe(); scanSub.unsubscribe(); missionSub.unsubscribe();
       ros.close();
     };
@@ -179,17 +202,41 @@ export default function App() {
 
   }, [scanData]);
 
+  // Reuse one ROS topic and refresh the command at 10 Hz while the user
+  // holds a control. twist_mux expires sources after 0.5 s.
   const sendTwist = (linear, angular) => {
     if (!rosRef.current) return;
-    const cmdVel = new ROSLIB.Topic({
-      ros: rosRef.current,
-      name: '/cmd_vel_web',
-      messageType: 'geometry_msgs/Twist'
-    });
-    cmdVel.publish(new ROSLIB.Message({
+    if (!cmdVelTopicRef.current) {
+      cmdVelTopicRef.current = new ROSLIB.Topic({
+        ros: rosRef.current,
+        name: '/cmd_vel_web',
+        messageType: 'geometry_msgs/Twist'
+      });
+    }
+    cmdVelTopicRef.current.publish(new ROSLIB.Message({
       linear: { x: linear, y: 0.0, z: 0.0 },
       angular: { x: 0.0, y: 0.0, z: angular }
     }));
+  };
+
+  const stopTeleop = () => {
+    if (teleopTimerRef.current !== null) {
+      window.clearInterval(teleopTimerRef.current);
+      teleopTimerRef.current = null;
+    }
+    sendTwist(0.0, 0.0);
+  };
+
+  const startTeleop = (linear, angular) => {
+    if (!rosRef.current) return;
+    if (teleopTimerRef.current !== null) {
+      window.clearInterval(teleopTimerRef.current);
+    }
+    sendTwist(linear, angular);
+    teleopTimerRef.current = window.setInterval(
+      () => sendTwist(linear, angular),
+      100
+    );
   };
 
   const startAutonomousMission = () => {
@@ -346,11 +393,11 @@ export default function App() {
             <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>Teclas [W, A, S, D] para mover | [Espacio / K] cancela Nav2 y solicita velocidad cero</span>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button onClick={() => sendTwist(0.2, 0.0)} style={{ backgroundColor: '#1f2937', color: '#38bdf8', border: '1px solid #374151', padding: '0.6rem 1.25rem', borderRadius: '0.5rem', fontWeight: '700', cursor: 'pointer' }}>W</button>
-            <button onClick={() => sendTwist(0.0, 0.5)} style={{ backgroundColor: '#1f2937', color: '#38bdf8', border: '1px solid #374151', padding: '0.6rem 1.25rem', borderRadius: '0.5rem', fontWeight: '700', cursor: 'pointer' }}>A</button>
-            <button onClick={forceStopRobot} style={{ backgroundColor: '#dc2626', color: '#fff', border: 'none', padding: '0.6rem 1.5rem', borderRadius: '0.5rem', fontWeight: '800', cursor: 'pointer', letterSpacing: '0.05em' }}>STOP POR COMANDO (Espacio / K)</button>
-            <button onClick={() => sendTwist(0.0, -0.5)} style={{ backgroundColor: '#1f2937', color: '#38bdf8', border: '1px solid #374151', padding: '0.6rem 1.25rem', borderRadius: '0.5rem', fontWeight: '700', cursor: 'pointer' }}>D</button>
-            <button onClick={() => sendTwist(-0.2, 0.0)} style={{ backgroundColor: '#1f2937', color: '#38bdf8', border: '1px solid #374151', padding: '0.6rem 1.25rem', borderRadius: '0.5rem', fontWeight: '700', cursor: 'pointer' }}>S</button>
+            <button onPointerDown={(e) => { e.preventDefault(); startTeleop(0.2, 0.0); }} onPointerUp={stopTeleop} onPointerLeave={stopTeleop} onPointerCancel={stopTeleop} style={{ backgroundColor: '#1f2937', color: '#38bdf8', border: '1px solid #374151', padding: '0.6rem 1.25rem', borderRadius: '0.5rem', fontWeight: '700', cursor: 'pointer' }}>W</button>
+            <button onPointerDown={(e) => { e.preventDefault(); startTeleop(0.0, 0.5); }} onPointerUp={stopTeleop} onPointerLeave={stopTeleop} onPointerCancel={stopTeleop} style={{ backgroundColor: '#1f2937', color: '#38bdf8', border: '1px solid #374151', padding: '0.6rem 1.25rem', borderRadius: '0.5rem', fontWeight: '700', cursor: 'pointer' }}>A</button>
+            <button onPointerDown={stopTeleop} onClick={forceStopRobot} style={{ backgroundColor: '#dc2626', color: '#fff', border: 'none', padding: '0.6rem 1.5rem', borderRadius: '0.5rem', fontWeight: '800', cursor: 'pointer', letterSpacing: '0.05em' }}>STOP POR COMANDO (Espacio / K)</button>
+            <button onPointerDown={(e) => { e.preventDefault(); startTeleop(0.0, -0.5); }} onPointerUp={stopTeleop} onPointerLeave={stopTeleop} onPointerCancel={stopTeleop} style={{ backgroundColor: '#1f2937', color: '#38bdf8', border: '1px solid #374151', padding: '0.6rem 1.25rem', borderRadius: '0.5rem', fontWeight: '700', cursor: 'pointer' }}>D</button>
+            <button onPointerDown={(e) => { e.preventDefault(); startTeleop(-0.2, 0.0); }} onPointerUp={stopTeleop} onPointerLeave={stopTeleop} onPointerCancel={stopTeleop} style={{ backgroundColor: '#1f2937', color: '#38bdf8', border: '1px solid #374151', padding: '0.6rem 1.25rem', borderRadius: '0.5rem', fontWeight: '700', cursor: 'pointer' }}>S</button>
           </div>
         </div>
 

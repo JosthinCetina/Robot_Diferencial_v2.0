@@ -163,7 +163,11 @@ wait_for_ros2_controllers 75
 
 # La base crea rosbridge y los nodos web después de 8 s en main.launch.py.
 # La navegación no se usa como condición para abrir la interfaz.
-wait_port 9090 15 "Rosbridge" || true
+if ! wait_port 9090 20 "Rosbridge"; then
+  warn "Rosbridge no está disponible; no se inicia la interfaz ni Nav2."
+  tail -n 100 "$LOG_DIR/base.log" 2>/dev/null || true
+  fail "La cadena web/teleoperación no puede funcionar sin rosbridge."
+fi
 if ! managed_alive base; then
   warn "La base ROS 2/Gazebo terminó durante el arranque. Registro reciente:"
   tail -n 100 "$LOG_DIR/base.log" || true
@@ -172,8 +176,12 @@ fi
 
 # Levanta primero la web, sin esperar a que Nav2 esté listo.
 info "Arrancando la interfaz web..."
-start_managed web "$LOG_DIR/web.log" npm --prefix "$WORKSPACE/web" run dev -- --host 0.0.0.0
-wait_port 3000 20 "Interfaz web HTTP" || true
+start_managed web "$LOG_DIR/web.log" npm --prefix "$WORKSPACE/web" run preview -- --host 0.0.0.0 --port 3000
+if ! wait_port 3000 20 "Interfaz web HTTP"; then
+  warn "Vite Preview no abrió HTTP 3000. Registro del frontend:"
+  tail -n 120 "$LOG_DIR/web.log" 2>/dev/null || true
+  fail "No se inicia Nav2: la interfaz de teleoperación no está disponible."
+fi
 if ! managed_alive web; then
   warn "Vite terminó durante el arranque. Registro reciente:"
   tail -n 100 "$LOG_DIR/web.log" || true

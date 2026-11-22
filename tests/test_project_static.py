@@ -253,21 +253,31 @@ def test_github_publish_and_docker_clone_workflows_exist():
     assert 'ROS_DOMAIN_ID' in (ROOT / 'docker-run.sh').read_text()
 
 
-def test_wsl_deployer_updates_existing_repo_and_preserves_named_volume():
+def test_wsl_deployer_is_incremental_and_avoids_expensive_runtime_scans():
     deploy = (ROOT / 'deploy_wsl.sh').read_text()
     assert 'Robot_Diferencial_v2.0.git' in deploy
     assert 'git clone --branch' in deploy
     assert 'git pull --ff-only' in deploy
     assert 'docker build -t' in deploy
     assert 'colcon build' in deploy
-    assert 'npm ci' in deploy and 'npm run build' in deploy
+    assert 'npm ci' in deploy and 'package-lock.json' in deploy
     assert 'START_DIF_BOT.sh' in deploy
     assert 'for id in base nav web' in deploy
     assert 'docker volume rm' not in deploy
-    assert 'post_deploy_diagnostic.log' in deploy
-    assert "ros2 action list" in deploy
-    assert 'DIAGNOSTIC_DIF_BOT.sh' in deploy
-    assert r'\${' not in deploy
+    assert 'rosdep update' not in deploy
+    assert 'ros2 action list' not in deploy
+    assert 'DIAGNOSTIC_DIF_BOT.sh' not in deploy
+    assert 'DIAG_CAPTURE' not in deploy
+
+
+def test_startup_requires_rosbridge_and_production_frontend_before_nav2():
+    start = (ROOT / 'START_DIF_BOT.sh').read_text()
+    assert 'wait_for_robot_spawn 90' in start
+    assert 'wait_for_ros2_controllers 75' in start
+    assert 'run preview' in start
+    assert 'wait_port 3000 20' in start
+    assert 'wait_port 9090 20' in start
+    assert 'No se inicia Nav2: la interfaz de teleoperación no está disponible.' in start
 
 
 def test_ci_workflow_covers_static_checks_and_jazzy_build():

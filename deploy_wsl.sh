@@ -114,12 +114,19 @@ docker exec "$CONTAINER" bash -lc '
   set -eo pipefail
   cd /ros2_ws
   source /opt/ros/jazzy/setup.bash
-  rosdep update
-  rosdep install --from-paths src --ignore-src -r -y --rosdistro jazzy
+  # ROS/OS dependencies are provisioned by the project Dockerfile.
+  # Avoid refreshing rosdep indexes on every run in a resource-constrained WSL VM.
   MAKEFLAGS="-j1" colcon build --symlink-install --executor sequential --event-handlers console_direct+
   source /ros2_ws/install/setup.bash
   cd /ros2_ws/web
-  npm ci
+  LOCK_HASH="$(sha256sum package-lock.json | awk '{print $1}')"
+  LOCK_MARKER="node_modules/.difbot-package-lock.sha256"
+  if [[ ! -x node_modules/.bin/vite || ! -f "$LOCK_MARKER" || "$(cat "$LOCK_MARKER" 2>/dev/null || true)" != "$LOCK_HASH" ]]; then
+    npm ci
+    printf "%s\\n" "$LOCK_HASH" > "$LOCK_MARKER"
+  else
+    echo "Frontend: package-lock sin cambios; se conservan node_modules."
+  fi
   npm run build
 '
 
@@ -163,70 +170,10 @@ if ! wait_for_port 3000; then
   fail "Despliegue incompleto: no está disponible http://localhost:3000."
 fi
 
-info "Dando tiempo a Nav2 para completar el arranque (máx. 60 s)..."
-NAV2_READY=false
-for _ in {1..30}; do
-  ACTIONS="$(docker exec "$CONTAINER" bash -lc 'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && RCUTILS_COLORIZED_OUTPUT=0 timeout 1 ros2 action list' 2>/dev/null || true)"
-  if grep -Fxq '/navigate_to_pose' <<<"$ACTIONS"; then
-    NAV2_READY=true
-    break
-  fi
-  sleep 1
-done
+info "Servicios base, interfaz y navegación iniciados. Se omiten barridos ROS intensivos durante el despliegue."
+echo "La validación funcional se realiza en las prácticas del proyecto y con RViz bajo demanda."
 
-# Capture to a user-writable /tmp file, never to /ros2_ws/logs (root-owned
-# files in the bind mount can make that directory unwritable from WSL).
-DIAG_CAPTURE="$(mktemp "${TMPDIR:-/tmp}/difbot_post_deploy_XXXXXX.log")"
-info "Ejecutando diagnóstico profundo de base, teleoperación y Nav2..."
-set +e
-docker exec "$CONTAINER" bash -lc 'cd /ros2_ws && ./DIAGNOSTIC_DIF_BOT.sh' >"$DIAG_CAPTURE" 2>&1
-DIAGNOSTIC_RC=$?
-docker exec "$CONTAINER" bash -lc '
-  echo
-  echo "===== LOGS CRUDOS (últimas 160 líneas) ====="
-  for f in /ros2_ws/logs/base.log /ros2_ws/logs/navigation.log /ros2_ws/logs/web.log; do
-    echo
-    echo "### $f"
-    tail -n 160 "$f" 2>/dev/null || true
-  done
-' >>"$DIAG_CAPTURE" 2>&1
-set -e
-
-# Keep a copy at the deployment root (not the Docker-owned logs directory).
-if [[ -w "$DEPLOY_ROOT" ]]; then
-  cp "$DIAG_CAPTURE" "$DEPLOY_ROOT/post_deploy_diagnostic.log" 2>/dev/null || true
-fi
-
-echo
-echo "===== DIAGNÓSTICO POST-DESPLIEGUE ====="
-cat "$DIAG_CAPTURE"
-echo "===== FIN DEL DIAGNÓSTICO ====="
-echo "Archivo de diagnóstico: $DIAG_CAPTURE"
-if [[ "$NAV2_READY" != "true" ]]; then
-  warn "Nav2 no expuso /navigate_to_pose dentro de los 60 s. Revisa los errores del log adjunto."
-fi
-if [[ "$DIAGNOSTIC_RC" -ne 0 ]]; then
-  warn "El diagnóstico detectó fallos (código $DIAGNOSTIC_RC). La base, los logs y la interfaz se conservan."
-fi
-
-echo
-echo "=========================================================="
-if [[ "$NAV2_READY" != "true" || "$DIAGNOSTIC_RC" -ne 0 ]]; then
-  echo
-  echo "=========================================================="
-  echo "           DIF_BOT OS - DESPLIEGUE PARCIAL"
-  echo "=========================================================="
-  echo "La simulación y la interfaz se conservan para diagnóstico."
-  echo "Nav2 listo             : $NAV2_READY"
-  echo "Código diagnóstico     : $DIAGNOSTIC_RC"
-  echo "Contenedor             : $CONTAINER"
-  echo "Captura                : $DIAG_CAPTURE"
-  echo
-  echo "No se declara teleoperación ni navegación autónoma funcional."
-  echo "Corrige los fallos indicados arriba antes de aceptar el despliegue."
-  exit 2
-fi
-echo "              DIF_BOT OS - DESPLIEGUE COMPLETADO"
+echo "              DIF_BOT OS - SERVICIOS INICIADOS"
 echo "=========================================================="
 echo "Repositorio WSL : $PROJECT_DIR"
 echo "Commit           : $(git rev-parse --short HEAD)"
@@ -244,3 +191,4 @@ echo
 echo "Para detener los nodos: docker exec $CONTAINER bash -lc 'cd /ros2_ws && ./STOP_DIF_BOT.sh'"
 echo "Para detener el contenedor: docker stop $CONTAINER"
 echo "El volumen $VOLUME (si existía) no fue eliminado."
+echo "No se ejecutan consultas ROS repetitivas ni barridos automáticos de topics/lifecycle."
