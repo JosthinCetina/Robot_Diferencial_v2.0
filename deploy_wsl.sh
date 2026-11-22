@@ -163,6 +163,36 @@ if ! wait_for_port 3000; then
   fail "Despliegue incompleto: no está disponible http://localhost:3000."
 fi
 
+info "Esperando hasta 120 s a que Nav2 exponga /navigate_to_pose..."
+NAV2_READY=false
+for _ in {1..60}; do
+  ACTIONS="$(docker exec "$CONTAINER" bash -lc 'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && timeout 6 ros2 action list' 2>/dev/null || true)"
+  if grep -Fxq '/navigate_to_pose' <<<"$ACTIONS"; then
+    NAV2_READY=true
+    break
+  fi
+  sleep 2
+done
+
+mkdir -p "$PROJECT_DIR/logs"
+info "Ejecutando diagnóstico posterior al despliegue..."
+set +e
+docker exec "$CONTAINER" bash -lc 'cd /ros2_ws && ./DIAGNOSTIC_DIF_BOT.sh' \
+  > "$PROJECT_DIR/logs/post_deploy_diagnostic.log" 2>&1
+DIAGNOSTIC_RC=$?
+set -e
+
+echo
+echo "===== DIAGNÓSTICO POST-DESPLIEGUE ====="
+tail -n 100 "$PROJECT_DIR/logs/post_deploy_diagnostic.log" || true
+echo "======================================="
+if [[ "$NAV2_READY" != "true" ]]; then
+  warn "Nav2 no expuso /navigate_to_pose dentro del tiempo de espera."
+fi
+if [[ "$DIAGNOSTIC_RC" -ne 0 ]]; then
+  warn "El diagnóstico reportó componentes pendientes (código $DIAGNOSTIC_RC). La base y la interfaz se conservan; revisa logs/post_deploy_diagnostic.log."
+fi
+
 echo
 echo "=========================================================="
 echo "              DIF_BOT OS - DESPLIEGUE COMPLETADO"

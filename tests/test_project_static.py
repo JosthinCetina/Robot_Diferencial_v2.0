@@ -264,6 +264,9 @@ def test_wsl_deployer_updates_existing_repo_and_preserves_named_volume():
     assert 'START_DIF_BOT.sh' in deploy
     assert 'for id in base nav web' in deploy
     assert 'docker volume rm' not in deploy
+    assert 'post_deploy_diagnostic.log' in deploy
+    assert "ros2 action list" in deploy
+    assert 'DIAGNOSTIC_DIF_BOT.sh' in deploy
     assert r'\${' not in deploy
 
 
