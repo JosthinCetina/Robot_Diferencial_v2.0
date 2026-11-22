@@ -3,7 +3,7 @@
 **Corte de revisión:** 22 de noviembre de 2026  
 **Repositorio:** \`JosthinCetina/Robot_Diferencial_v2.0\`  
 **Rama:** \`main\`  
-**Commit base auditado:** `9bff4ef`; actualización tras el despliegue del 22 de noviembre que presentó pérdida de teleoperación y abortos inmediatos de Nav2.
+**Commit base auditado:** `4e0b436`; revisión posterior al despliegue del 22 de noviembre que presentó caída de HTTP 3000, teleoperación no disponible y espera prolongada de Nav2.
 
 Este documento registra el estado de implementación y funcionamiento conocido de los seis componentes técnicos definidos en \`rbtc_proyecto_final_v1.pdf\`. No evalúa video, informe académico ni otros requisitos de entrega.
 
@@ -17,12 +17,12 @@ La arquitectura de software está integrada en seis paquetes ROS 2 y utiliza ROS
 
 | Componente | Implementación en el repositorio | Funcionamiento conocido | Trabajo necesario para aceptación |
 |---|---|---|---|
-| 1. Control diferencial y odometría | Modo Gazebo DiffDrive y modo `gz_ros2_control`; adaptadores a `/cmd_vel` y `/odom_raw`. | **Degradado en el despliegue más reciente.** Gazebo insertó el modelo y los controladores aparecieron activos, pero el usuario reportó que no pudo teleoperar. La cadena efectiva `/cmd_vel_web -> twist_mux -> /cmd_vel -> cmd_vel_stamper -> diff_drive_controller` todavía no está demostrada. | Capturar publicadores/suscriptores reales, comprobar recepción de Twist y TwistStamped y verificar cambio de `/odom_raw`. La comparación de modos sigue pendiente. |
-| 2. Fusión EKF | \`ekf.yaml\` integra \`/odom_raw\` y \`/imu/data\`; publica \`/odom_filtered\` y TF \`odom -> base_footprint\`. | **Pendiente de revalidación.** En sesiones anteriores hubo lecturas intermitentes de \`/odom_raw\` y covarianzas anormalmente grandes en \`/odom_filtered\`. Se ajustó la selección de IMU para no fusionar yaw absoluto con covarianza de orientación observada en cero. | Confirmar datos de entrada, covarianzas, ausencia de NaN/Inf y evolución coherente de TF con el robot en movimiento. |
-| 3. Mapeo SLAM | SLAM Toolbox, parámetros asíncronos, lanzamiento y mapa PGM/YAML versionado. | **Parcial.** El mapa existente tiene dimensiones/resolución conocidas. El README lo identifica como heredado; no hay evidencia de que sea una reconstrucción SLAM reciente alineada con el mundo actual. | Ejecutar exploración lenta, guardar mapa nuevo y comparar obstáculos con Gazebo en RViz2. |
-| 4. Localización AMCL | AMCL, Map Server, parámetros de partículas, frame map/odom/base y pose inicial configurada. | **Pendiente de convergencia.** En sesiones previas Map Server y AMCL llegaron a estar activos, pero no se confirmó una pose AMCL estable. | Confirmar \`/amcl_pose\`, nube de partículas y TF \`map -> odom\`; probar pose inicial incorrecta y ruido de LiDAR. |
-| 5. Navegación Nav2 | NavFn, DWB, costmaps global/local, BT Navigator y cuatro comportamientos de recuperación. | **No funcional en el último despliegue.** El usuario reporta aborto inmediato al enviar objetivos. El despliegue anterior no produjo diagnóstico usable: la redirección del informe falló por permisos y el launcher solo comprobó que el proceso supervisor siguiera vivo. La corrección de yaw y `PoseProgressChecker` está en el código, pero su comportamiento runtime no está validado. | Capturar estado lifecycle, `/navigate_to_pose`, `/amcl_pose`, `/map`, `/odom_filtered`, costmaps y logs de los tres procesos. No aumentar tolerancias ni marcar Nav2 como operativo hasta aislar la causa. |
-| 6. Misiones autónomas | Servidor Python con BasicNavigator, servicio Trigger, YAML de waypoints y tópico de progreso. | **Implementación presente; ejecución integral no demostrada.** El YAML incluye tres puntos. Se añade validación estática de que esos puntos caen en celdas libres y límites temporales para evitar esperas indefinidas. | Ejecutar los tres puntos en orden, confirmar progreso y resultado, y comprobar rechazo de metas fallidas y bloqueo de misiones simultáneas. |
+| 1. Control diferencial y odometría | Plugin DiffDrive de Gazebo y `gz_ros2_control`, adaptadores `/cmd_vel` y `/odom_raw`. | **Parcial.** El último despliegue confirmó robot y controladores activos, pero HTTP 3000 no abrió y la teleoperación web no estuvo disponible. La UI ya se corrige para publicar Twist a 10 Hz mientras se mantiene pulsado y Twist cero al soltar; falta revalidación en ejecución. | Validar ambos modos por separado, recepción Twist/TwistStamped y cambio de `/odom_raw`; medir estabilidad/latencia y comparar fuentes de odometría. |
+| 2. Fusión EKF | `ekf.yaml` fusiona `/odom_raw` y `/imu/data`; publica `/odom_filtered` y TF `odom -> base_footprint`. | **Implementado; validación runtime pendiente.** EKF está integrado en Nav2 y en `slam.launch.py` por defecto para crear la TF odométrica que requiere SLAM Toolbox. | Confirmar entradas, covarianzas, ausencia NaN/Inf, evolución TF y efecto de deshabilitar IMU. |
+| 3. Mapeo SLAM | SLAM Toolbox asíncrono, parámetros 0,05 m, frames `map/odom/base_footprint`, mapa PGM/YAML y script `save_map.sh`. | **Implementación integrada; mapa actual no certificado como reconstrucción reciente.** SLAM incluye EKF por defecto y se agrega guardado reproducible YAML/PGM bajo `maps/`. | Explorar el mundo actual, guardar mapa nuevo, comprobar resolución/alineación en RViz y evaluar errores a distintas velocidades. |
+| 4. Localización AMCL | Map Server, AMCL, partículas, pose inicial, frames map/odom/base y parámetros de ruido. | **Implementado; convergencia no demostrada.** Map Server recibe un mapa configurable del package share y se incorpora perfil RViz con nube de partículas y estimación inicial. | Observar convergencia en RViz, publicar pose inicial incorrecta y evaluar ruido LiDAR. |
+| 5. Navegación Nav2 | NavFn, DWB, progress/goal checkers, costmaps, Behavior Server, BT Navigator y GoalTool RViz. | **No funcional en la última evidencia.** El usuario reportó abortos inmediatos y HTTP 3000 estuvo caído en el último despliegue. Se integra perfil RViz y configuración de mapa; yaw opcional/PoseProgressChecker ya están en código. Falta validación runtime. | Ejecutar metas UI/RViz, verificar lifecycle/AMCL, planes global/local, seguimiento angular y varios objetivos consecutivos sin abortos. |
+| 6. Misiones autónomas | Servidor Python con BasicNavigator, servicio Trigger, YAML de waypoints, timeout y feedback. | **Implementación presente; misión integral no demostrada.** Los tres waypoints están configurados y validados estáticamente contra el mapa; el último run no confirmó navegación estable. | Ejecutar la secuencia real de tres waypoints, confirmar progreso/resultados y rechazo de metas fallidas y misiones simultáneas. |
 
 ## Evidencia que ya existe
 
@@ -95,3 +95,20 @@ En la prueba reportada por el usuario, la teleoperación no produjo movimiento y
 El diagnóstico automático de ese despliegue falló antes de ejecutar el script: la redirección intentó escribir `logs/post_deploy_diagnostic.log` en un directorio del bind mount sin permisos para el usuario WSL y devolvió `Permission denied`. Por tanto, no se obtuvo estado runtime ni extractos de `navigation.log`. El resultado debe clasificarse como **regresión funcional sin causa raíz confirmada**, no como fallo específico de DWB o del EKF.
 
 El desplegador se modifica para capturar en un archivo temporal propiedad del usuario, imprimirlo completo y adjuntar también las últimas líneas crudas de `base.log`, `navigation.log` y `web.log`. El diagnóstico revisa las cadenas de mando, el estado de controladores, nodos, tópicos, acción, lifecycle, muestras de odometría y AMCL, parámetros de DWB y errores de logs.
+
+
+## Incidente de despliegue del 22 de noviembre (commit 602a429)
+
+El registro confirma que `colcon build` finalizó con seis paquetes, Vite construyó el frontend, Gazebo insertó el robot y los controladores aparecieron activos. Sin embargo, HTTP 3000 no abrió después de 20 segundos; `START_DIF_BOT.sh` continuó hasta iniciar Nav2. La interfaz no estaba disponible para teleoperar.
+
+El despliegue entró después en una espera de `/navigate_to_pose` y realizaba consultas repetidas `ros2 action list`, seguidas por un barrido de nodos, topics, lifecycle y `topic echo --once`. Repetir ese procedimiento bajo carga de Gazebo/WSL2 explica el tiempo prolongado y la degradación. Esas operaciones se retiraron del camino normal de despliegue. La validación funcional se ejecuta siguiendo el plan de prácticas, no durante cada reconstrucción.
+
+La UI publica ahora Twist sostenido a 10 Hz mientras se mantiene un control y publica cero al soltar o perder foco. El inicio usa `vite preview`, requiere que rosbridge y HTTP estén disponibles y no lanza Nav2 si la web falla.
+
+## Integración de prácticas 3, 4 y 5
+
+`slam.launch.py` inicia EKF por defecto para proveer `odom -> base_footprint`. `navigation.launch.py` carga el mapa mediante un parámetro configurable cuya ruta predeterminada está en el package share. Se agrega `rviz.launch.py` y un perfil que muestra mapa, RobotModel, TF, LiDAR, partículas AMCL, planes y Nav2 GoalTool. RViz es bajo demanda para reducir carga.
+
+`scripts/save_map.sh` usa Map Saver y guarda YAML/PGM bajo `src/dif_bot_navigation/maps/`. Se reduce el paso de física a 2 ms (500 Hz), se desactiva visualización de rayos LiDAR y se reduce la cámara a 320×240/5 Hz; el IMU sigue a 100 Hz y el LiDAR a 10 Hz. La configuración necesita validación de movimiento y EKF en ejecución.
+
+**Aceptación:** ninguna práctica se marca funcional solo por compilar. Teleoperación, EKF, SLAM, convergencia AMCL, navegación desde RViz y misión secuencial siguen pendientes de evidencia runtime.

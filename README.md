@@ -100,19 +100,47 @@ ros2 launch dif_bot_bringup main.launch.py use_sim_time:=true use_ros2_control:=
 
 ## 5. Mapa, SLAM y waypoints
 
-SLAM Toolbox se lanza por separado y no debe ejecutarse simultáneamente con AMCL:
+SLAM Toolbox se ejecuta por separado de AMCL. Su lanzamiento inicia EKF por defecto porque necesita la TF `odom -> base_footprint`:
 
-\`\`\`bash
+```bash
+# La base debe estar activa una sola vez, con launch_navigation:=false.
 ros2 launch dif_bot_bringup main.launch.py use_sim_time:=true launch_navigation:=false
-ros2 launch dif_bot_navigation ekf.launch.py use_sim_time:=true
+
+# EKF + SLAM Toolbox:
 ros2 launch dif_bot_navigation slam.launch.py use_sim_time:=true
-\`\`\`
+```
 
-Después de explorar el mundo con velocidades reducidas, guarda el mapa en \`src/dif_bot_navigation/maps/\` y actualiza \`my_map.yaml\` para apuntar al mapa generado.
+Si ya existe otro EKF activo, usa `launch_ekf:=false`. Explora el entorno a velocidad moderada y guarda el mapa desde el contenedor:
 
-El mapa versionado actualmente tiene 197 × 197 celdas a 0,05 m/resolución y origen aproximado \`[-4.93, -4.94, 0]\`. Las pruebas estáticas comprueban que la pose inicial (0,0) y los tres waypoints incluidos en \`config/waypoints.yaml\` caen en celdas libres de ese archivo. Esta comprobación **no sustituye** la alineación visual del mapa con el mundo Gazebo en RViz2 ni demuestra que las rutas sean transitables.
+```bash
+./scripts/save_map.sh
+# O guarda otro mapa:
+./scripts/save_map.sh warehouse_test
+```
+
+El script genera YAML y PGM dentro de `src/dif_bot_navigation/maps/`. Para usar otro mapa con AMCL/Nav2, proporciona `map_file:=/ros2_ws/src/dif_bot_navigation/maps/warehouse_test.yaml` al lanzamiento.
+
+El mapa versionado actualmente tiene 197 × 197 celdas a 0,05 m/resolución y origen aproximado `[-4.93, -4.94, 0]`. Las pruebas estáticas comprueban que la pose inicial (0,0) y los tres waypoints incluidos en `config/waypoints.yaml` caen en celdas libres de ese archivo. Esta comprobación **no sustituye** la alineación visual del mapa con el mundo Gazebo en RViz2 ni demuestra que las rutas sean transitables.
 
 Los waypoints son puntos de ejemplo que deben volver a comprobarse cada vez que se sustituya el mapa.
+
+## 5A. Visualización con RViz2 (Prácticas 4 y 5)
+
+Con Nav2 activo, abre RViz sin iniciar una segunda instancia de Nav2:
+
+```bash
+ros2 launch dif_bot_navigation rviz.launch.py use_sim_time:=true
+```
+
+El perfil `config/navigation.rviz` usa el frame fijo `map` y muestra mapa, RobotModel, TF, LiDAR, nube de partículas AMCL, planes global/local y Nav2 GoalTool. Usa **2D Pose Estimate** para establecer o corregir la pose inicial y **Nav2 GoalTool** para enviar metas manuales. Los costmaps pueden activarse desde Displays cuando se necesite inspeccionarlos.
+
+También puedes iniciar Nav2 y RViz juntos, solo cuando Nav2 todavía no esté ejecutándose:
+
+```bash
+ros2 launch dif_bot_navigation navigation.launch.py launch_rviz:=true map_file:=/ros2_ws/src/dif_bot_navigation/maps/my_map.yaml
+```
+
+RViz no se inicia automáticamente durante el despliegue para evitar carga gráfica permanente en WSL2.
 
 ## 6. Validación automática y pruebas funcionales
 

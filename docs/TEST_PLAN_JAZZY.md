@@ -111,17 +111,17 @@ Para construir/actualizar mapa, no arranques Nav2/AMCL en paralelo. En una prime
 ros2 launch dif_bot_bringup main.launch.py use_sim_time:=true launch_navigation:=false
 ```
 
-En una segunda terminal inicia el EKF (necesario para `odom -> base_footprint`) y en una tercera SLAM Toolbox:
+Con la base en ejecución y una sola instancia del EKF, inicia SLAM Toolbox. El launch de SLAM inicia EKF por defecto para crear `odom -> base_footprint`:
 
 ```bash
-ros2 launch dif_bot_navigation ekf.launch.py use_sim_time:=true
+# slam.launch.py inicia EKF de forma predeterminada.
 ros2 launch dif_bot_navigation slam.launch.py use_sim_time:=true
 ```
 
 Conducir lentamente y guardar el mapa con `nav2_map_server`/`map_saver_cli` (según la CLI instalada):
 
 ```bash
-ros2 run nav2_map_server map_saver_cli -f /ros2_ws/src/dif_bot_navigation/maps/generated_map
+./scripts/save_map.sh generated_map
 ```
 
 Para navegación sobre el mapa estático, relanzar el sistema con Nav2 y validar `/map`, AMCL y la pose inicial. En RViz2 establece `Initial Pose` si no hay localización válida.
@@ -154,13 +154,13 @@ Criterios: cada punto se ejecuta en orden; el mensaje avanza; una meta inalcanza
 
 ## Fase 9 — Interfaz web / rosbridge
 
-En terminal independiente:
+En terminal independiente, para desarrollo usar Vite dev; para probar el despliegue normal, construir y servir el bundle de producción:
 
 ```bash
 cd /ros2_ws/web
 npm ci
 npm run build
-npm run dev -- --host 0.0.0.0
+npm run preview -- --host 0.0.0.0 --port 3000
 ```
 
 Abrir `http://localhost:3000`. Verificar:
@@ -209,3 +209,33 @@ Con una meta XY cercana, verificar que:
 - La acción termina `SUCCEEDED`; un `ABORTED` no se reinterpreta como éxito únicamente por estar dentro de XY.
 
 Parámetros de referencia: XY 0,05 m, yaw 0,10 rad, radio de progreso 0,08 m, progreso angular 0,05 rad y allowance 30 s.
+
+
+## Fase 1A — Teleoperación sostenida desde web
+
+- Mantener pulsada una tecla W/A/S/D o uno de los botones.
+- Confirmar publicación de `/cmd_vel_web` a 10 Hz mientras se mantiene el control.
+- Soltar la tecla/botón y confirmar que la UI publica Twist cero.
+- Cambiar de ventana o perder el foco y confirmar que se detiene el comando sostenido.
+- Verificar la cadena `/cmd_vel_web -> twist_mux -> /cmd_vel -> cmd_vel_stamper -> /diff_drive_controller/cmd_vel`.
+- El timeout del mux sigue siendo 0,5 s; la UI debe refrescar el comando mientras el control está activo.
+
+## Fase 3A — SLAM con EKF y guardado del mapa
+
+- Iniciar base con `launch_navigation:=false`.
+- Ejecutar `ros2 launch dif_bot_navigation slam.launch.py use_sim_time:=true`; EKF se inicia por defecto.
+- Explorar lentamente y validar `/scan`, `/map` y TF.
+- Guardar usando `./scripts/save_map.sh [nombre]` y comprobar YAML/PGM en `src/dif_bot_navigation/maps/`.
+- No ejecutar SLAM y AMCL simultáneamente.
+
+## Fases 4 y 5 — RViz2, AMCL y objetivos manuales
+
+- Con Nav2 activo, ejecutar `ros2 launch dif_bot_navigation rviz.launch.py use_sim_time:=true`.
+- Confirmar frame fijo `map`, mapa, RobotModel, TF, LiDAR y nube de partículas AMCL.
+- Usar 2D Pose Estimate; comprobar convergencia de AMCL y TF `map -> odom`.
+- Usar Nav2 GoalTool para enviar una meta manual; observar plan global/local, costmaps y estado final de la acción.
+- Repetir desde una pose inicial incorrecta y observar recuperación de AMCL.
+
+## Rendimiento WSL2
+
+El perfil aligerado conserva IMU 100 Hz y LiDAR 10 Hz; reduce cámara a 320×240/5 Hz, apaga la visualización de rayos LiDAR y usa paso de física 2 ms (500 Hz). Deben validarse movimiento y EKF con esos valores; reducir carga no reemplaza la prueba de estabilidad.

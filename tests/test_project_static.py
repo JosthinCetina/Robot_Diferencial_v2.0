@@ -389,22 +389,73 @@ def test_runtime_diagnostic_checks_command_chain_localization_and_logs():
         assert token in diagnostic
 
 
-def test_wsl_deployer_captures_diagnostics_outside_root_owned_logs_directory():
+def test_deployer_does_not_run_heavy_runtime_diagnostics_automatically():
     deploy = (ROOT / 'deploy_wsl.sh').read_text()
-    assert 'mktemp' in deploy
-    assert 'difbot_post_deploy_' in deploy
-    assert 'post_deploy_diagnostic.log' in deploy
-    assert 'cat "$DIAG_CAPTURE"' in deploy
-    assert 'logs/post_deploy_diagnostic.log' not in deploy
-    assert 'tail -n 160 "$f"' in deploy
-    assert 'DIF_BOT OS - DESPLIEGUE PARCIAL' in deploy
-    assert 'No se declara teleoperación ni navegación autónoma funcional.' in deploy
-    assert 'exit 2' in deploy
+    assert 'ros2 action list' not in deploy
+    assert 'DIAGNOSTIC_DIF_BOT.sh' not in deploy
+    assert 'rosdep update' not in deploy
+    assert 'LOCK_MARKER' in deploy
+    assert 'SERVICIOS INICIADOS' in deploy
 
 
-def test_deployer_nav2_readiness_wait_is_bounded():
-    deploy = (ROOT / 'deploy_wsl.sh').read_text()
-    assert 'for _ in {1..30}; do' in deploy
-    assert 'timeout 1 ros2 action list' in deploy
-    assert 'NAV2_READY=false' in deploy
-    assert 'DESPLIEGUE PARCIAL' in deploy
+
+def test_slam_launch_includes_ekf_for_required_odom_tf():
+    launch = (ROOT / 'src/dif_bot_navigation/launch/slam.launch.py').read_text()
+    assert "package='robot_localization'" in launch
+    assert "name='ekf_filter_node'" in launch
+    assert "default_value='true'" in launch
+    assert "package='slam_toolbox'" in launch
+    assert "remappings=[('odometry/filtered', '/odom_filtered')]" in launch
+
+
+def test_nav2_map_server_uses_package_share_map_and_optional_rviz():
+    launch = (ROOT / 'src/dif_bot_navigation/launch/navigation.launch.py').read_text()
+    params = yaml.safe_load(
+        (ROOT / 'src/dif_bot_navigation/config/nav2_params.yaml').read_text()
+    )
+    assert "default_value=os.path.join(share, 'maps', 'my_map.yaml')" in launch
+    assert "'yaml_filename': map_file" in launch
+    assert "default_value='false'" in launch
+    assert "package='rviz2'" in launch
+    assert "name='nav2_rviz'" in launch
+    assert 'yaml_filename' not in params['map_server']['ros__parameters']
+
+
+def test_rviz_profile_supports_amcl_and_manual_nav2_goals():
+    rviz = yaml.safe_load(
+        (ROOT / 'src/dif_bot_navigation/config/navigation.rviz').read_text()
+    )
+    manager = rviz['Visualization Manager']
+    classes = {entry.get('Class') for entry in manager['Displays']}
+    tools = {entry['Class'] for entry in manager['Tools']}
+    panels = {entry['Class'] for entry in rviz['Panels']}
+    assert manager['Global Options']['Fixed Frame'] == 'map'
+    assert 'rviz_default_plugins/Map' in classes
+    assert 'rviz_default_plugins/LaserScan' in classes
+    assert 'nav2_rviz_plugins/ParticleCloud' in classes
+    assert 'nav2_rviz_plugins/GoalTool' in tools
+    assert 'rviz_default_plugins/SetInitialPose' in tools
+    assert 'nav2_rviz_plugins/Navigation 2' in panels
+
+
+def test_map_saver_script_writes_yaml_and_pgm_inside_package_maps():
+    script = (ROOT / 'scripts/save_map.sh').read_text()
+    assert 'src/dif_bot_navigation/maps' in script
+    assert 'map_saver_cli' in script
+    assert 'PREFIX.yaml' in script
+    assert 'PREFIX.pgm' in script
+    assert 'MAP_NAME' in script
+
+
+def test_simulation_defaults_reduce_wsl_load_without_removing_sensors():
+    world = ET.parse(
+        (ROOT / 'src/dif_bot_gazebo/worlds/my_world.sdf')
+    ).getroot()
+    physics = world.find('.//physics')
+    assert float(physics.findtext('max_step_size')) == 0.002
+    sensors = (ROOT / 'src/dif_bot_description/urdf/sensors.xacro').read_text()
+    assert '<update_rate>100</update_rate>' in sensors
+    assert '<update_rate>10</update_rate>' in sensors
+    assert '<update_rate>5</update_rate>' in sensors
+    assert '<width>320</width><height>240</height>' in sensors
+    assert '<visualize>false</visualize>' in sensors
