@@ -1,65 +1,201 @@
 import os
+
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, TimerAction, RegisterEventHandler
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    LogInfo,
+    RegisterEventHandler,
+)
 from launch.event_handlers import OnProcessExit
-from launch.conditions import IfCondition, UnlessCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
-from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description():
     description_share = get_package_share_directory('dif_bot_description')
     gazebo_share = get_package_share_directory('dif_bot_gazebo')
-    world = os.path.join(gazebo_share, 'worlds', 'my_world.sdf')
-    xacro_file = os.path.join(description_share, 'urdf', 'dif_bot_description.urdf.xacro')
+    ros_gz_share = get_package_share_directory('ros_gz_sim')
+
+    world_file = os.path.join(gazebo_share, 'worlds', 'my_world.sdf')
+    xacro_file = os.path.join(
+        description_share, 'urdf', 'dif_bot_description.urdf.xacro'
+    )
+    gz_launch_file = os.path.join(
+        ros_gz_share, 'launch', 'gz_sim.launch.py'
+    )
 
     use_sim_time = LaunchConfiguration('use_sim_time')
     use_ros2_control = LaunchConfiguration('use_ros2_control')
+    world_name = LaunchConfiguration('world_name')
+
+    # Expand Xacro once as a launch substitution and provide the exact same
+    # description to robot_state_publisher and ros_gz_sim/create.
     robot_description = ParameterValue(
-        Command(['xacro ', xacro_file, ' use_ros2_control:=', use_ros2_control]), value_type=str)
+        Command([
+            'xacro ',
+            xacro_file,
+            ' use_ros2_control:=',
+            use_ros2_control,
+        ]),
+        value_type=str,
+    )
 
-    gz = ExecuteProcess(cmd=['gz', 'sim', '-r', '-v', '3', world], output='screen')
-    rsp = Node(package='robot_state_publisher', executable='robot_state_publisher',
-               parameters=[{'robot_description': robot_description, 'use_sim_time': use_sim_time}],
-               output='screen')
-    create = Node(package='ros_gz_sim', executable='create',
-                  arguments=['-name', 'dif_bot', '-topic', 'robot_description', '-x', '0', '-y', '0', '-z', '0.0'],
-                  output='screen')
+    # Use the official ros_gz_sim launch action. It sets Gazebo resource and
+    # system-plugin search paths from installed ROS packages.
+    gazebo = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(gz_launch_file),
+        launch_arguments={
+            'gz_args': ['-r -v 3 ', world_file],
+            'on_exit_shutdown': 'true',
+        }.items(),
+    )
 
-    sensor_bridge = Node(package='ros_gz_bridge', executable='parameter_bridge',
+    robot_state_publisher = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        name='robot_state_publisher',
+        parameters=[{
+            'robot_description': robot_description,
+            'use_sim_time': use_sim_time,
+        }],
+        output='screen',
+    )
+
+    # Pass the URDF as a ROS parameter rather than relying on discovery and
+    # transient-local delivery of /robot_description. Explicit world name also
+    # avoids the /gazebo/worlds discovery request in ros_gz_sim/create.
+    spawn_robot = Node(
+        package='ros_gz_sim',
+        executable='create',
+        name='spawn_dif_bot',
+        arguments=[
+            '-world', world_name,
+            '-param', 'robot_description',
+            '-name', 'dif_bot',
+            '-x', '0.0',
+            '-y', '0.0',
+            '-z', '0.0',
+        ],
+        parameters=[{'robot_description': robot_description}],
+        output='screen',
+    )
+
+    sensor_bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        name='sensor_bridge',
         arguments=[
             '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
             '/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
             '/imu/data@sensor_msgs/msg/Imu[gz.msgs.IMU',
             '/camera/image@sensor_msgs/msg/Image[gz.msgs.Image',
-        ], output='screen', parameters=[{'use_sim_time': use_sim_time}])
-
-    jsb_spawner = Node(package='controller_manager', executable='spawner',
-        arguments=['joint_state_broadcaster', '--controller-manager', '/controller_manager'], output='screen')
-    diff_spawner = Node(package='controller_manager', executable='spawner',
-        arguments=['diff_drive_controller', '--controller-manager', '/controller_manager'], output='screen')
-
-    # Cargar el controlador diferencial solo después de activar el broadcaster.
-    controller_spawner_sequence = RegisterEventHandler(
-        OnProcessExit(target_action=jsb_spawner, on_exit=[diff_spawner])
+        ],
+        parameters=[{'use_sim_time': use_sim_time}],
+        output='screen',
     )
 
-    native_bridge = Node(package='ros_gz_bridge', executable='parameter_bridge',
+    jsb_spawner = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=[
+            'joint_state_broadcaster',
+            '--controller-manager',
+            '/controller_manager',
+            '--controller-manager-timeout',
+            '60',
+        ],
+        output='screen',
+    )
+
+    diff_spawner = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=[
+            'diff_drive_controller',
+            '--controller-manager',
+            '/controller_manager',
+            '--controller-manager-timeout',
+            '60',
+        ],
+        output='screen',
+    )
+
+    # In ros2_control mode, controller_manager is created by the Gazebo model
+    # plugin. Start the spawners only after create has returned successfully.
+    start_controllers_after_spawn = RegisterEventHandler(
+        OnProcessExit(
+            target_action=spawn_robot,
+            on_exit=[
+                LogInfo(
+                    msg=(
+                        '[DIF_BOT] El proceso de inserción del robot terminó; '
+                        'se inicia joint_state_broadcaster.'
+                    )
+                ),
+                jsb_spawner,
+            ],
+        )
+    )
+
+    start_diff_drive_after_broadcaster = RegisterEventHandler(
+        OnProcessExit(
+            target_action=jsb_spawner,
+            on_exit=[
+                LogInfo(
+                    msg='[DIF_BOT] Se inicia diff_drive_controller.'
+                ),
+                diff_spawner,
+            ],
+        )
+    )
+
+    native_bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        name='native_diff_drive_bridge',
         arguments=[
             '/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
             '/odom_raw@nav_msgs/msg/Odometry[gz.msgs.Odometry',
-        ], output='screen', parameters=[{'use_sim_time': use_sim_time}],
-        condition=UnlessCondition(use_ros2_control))
+        ],
+        parameters=[{'use_sim_time': use_sim_time}],
+        output='screen',
+        condition=None,
+    )
+
+    # The native bridge belongs only to the native Gazebo DiffDrive mode.
+    from launch.conditions import UnlessCondition
+    native_bridge.condition = UnlessCondition(use_ros2_control)
 
     return LaunchDescription([
-        DeclareLaunchArgument('use_sim_time', default_value='true'),
-        DeclareLaunchArgument('use_ros2_control', default_value='true',
-            description='true: gz_ros2_control + diff_drive_controller; false: Gazebo Sim DiffDrive system'),
-        gz, rsp,
-        TimerAction(period=6.0, actions=[create, sensor_bridge]),
-        TimerAction(period=7.0, actions=[jsb_spawner], condition=IfCondition(use_ros2_control)),
-        controller_spawner_sequence,
+        DeclareLaunchArgument(
+            'use_sim_time',
+            default_value='true',
+        ),
+        DeclareLaunchArgument(
+            'use_ros2_control',
+            default_value='true',
+            description=(
+                'true: gz_ros2_control + diff_drive_controller; '
+                'false: Gazebo Sim DiffDrive system'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'world_name',
+            default_value='dif_bot_world',
+            description='Nombre exacto del mundo declarado en my_world.sdf.',
+        ),
+
+        # Register handlers before the processes they observe.
+        start_controllers_after_spawn,
+        start_diff_drive_after_broadcaster,
+
+        gazebo,
+        robot_state_publisher,
+        sensor_bridge,
+        spawn_robot,
         native_bridge,
     ])

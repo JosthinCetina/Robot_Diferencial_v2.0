@@ -285,3 +285,32 @@ def test_docker_image_has_jazzy_control_stack_without_duplicate_apt_packages():
     ) == 1
     assert dockerfile.count('ros-jazzy-ros2-controllers') == 1
     assert 'FROM ros:jazzy-ros-base' in dockerfile
+
+
+def test_gazebo_spawn_uses_explicit_world_and_robot_description_parameter():
+    launch = (
+        ROOT / 'src/dif_bot_gazebo/launch/gazebo.launch.py'
+    ).read_text()
+    world = ET.parse(
+        ROOT / 'src/dif_bot_gazebo/worlds/my_world.sdf'
+    ).getroot().find('world')
+    assert world is not None
+    assert world.attrib['name'] == 'dif_bot_world'
+    assert "'world_name'," in launch
+    assert "default_value='dif_bot_world'" in launch
+    assert "'-world', world_name" in launch
+    assert "'-param', 'robot_description'" in launch
+    assert "parameters=[{'robot_description': robot_description}]" in launch
+    assert 'TimerAction' not in launch
+    assert 'gz_sim.launch.py' in launch
+    assert 'on_exit_shutdown' in launch
+    assert 'target_action=spawn_robot' in launch
+
+
+def test_start_script_fails_loudly_when_robot_did_not_spawn():
+    start = (ROOT / 'START_DIF_BOT.sh').read_text()
+    assert 'wait_for_robot_spawn 90' in start
+    assert 'Entity creation successful.' in start
+    assert 'wait_for_ros2_controllers 75' in start
+    assert 'joint_state_broadcaster.*active' in start
+    assert 'diff_drive_controller.*active' in start

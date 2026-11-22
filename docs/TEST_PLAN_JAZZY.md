@@ -50,9 +50,11 @@ source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash
 ros2 control list_controllers
 ros2 control list_controller_types
 ros2 topic echo /joint_states --once
+# El log de create debe contener: Entity creation successful.
+grep -F 'Entity creation successful.' /ros2_ws/logs/base.log
 ```
 
-Criterios para modo ros2_control: `joint_state_broadcaster` y `diff_drive_controller` están `active`; `/joint_states` contiene `left_wheel_joint` y `right_wheel_joint`. Gazebo muestra el robot y el mundo.
+Criterios para modo ros2_control: el log de `ros_gz_sim/create` confirma `Entity creation successful.`; `joint_state_broadcaster` y `diff_drive_controller` están `active`; `/joint_states` contiene `left_wheel_joint` y `right_wheel_joint`. Gazebo muestra el robot y el mundo. El lanzamiento fija el mundo `dif_bot_world` y no usa una espera temporal fija para insertar el modelo.
 
 Prueba equivalente del modo nativo: detener toda la simulación anterior y arrancar con `use_ros2_control:=false`. No deben aparecer spawners ni controller_manager del robot; sí debe verse Gazebo ejecutando el sistema DiffDrive. Verifica `/odom_raw` y comando `/cmd_vel` como en la fase siguiente.
 

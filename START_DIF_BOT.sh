@@ -104,6 +104,63 @@ info "Arrancando la simulación BASE sin Nav2 (Nav2 tendrá su propio proceso y 
 start_managed base "$LOG_DIR/base.log" ros2 launch dif_bot_bringup main.launch.py \
   use_sim_time:=true use_ros2_control:=true launch_navigation:=false
 
+# Do not report a successful simulation when Gazebo opened but the robot did
+# not spawn. ros_gz_sim/create prints this exact line only after Gazebo accepts
+# the entity factory request.
+wait_for_robot_spawn(){
+  local limit="${1:-90}"
+  info "Esperando confirmación de inserción de dif_bot en Gazebo (máx. ${limit}s)..."
+  for ((s=1; s<=limit; s++)); do
+    if grep -Fq "Entity creation successful." "$LOG_DIR/base.log" 2>/dev/null; then
+      info "Gazebo confirmó la inserción del modelo dif_bot."
+      return 0
+    fi
+
+    if grep -Eq "Failed to get XML from topic|Entity creation failed|Timed out when getting world names|Failed to get world names" "$LOG_DIR/base.log" 2>/dev/null; then
+      warn "ros_gz_sim/create informó un error de inserción:"
+      tail -n 100 "$LOG_DIR/base.log" || true
+      fail "Gazebo arrancó, pero no pudo insertar el robot."
+    fi
+
+    if ! managed_alive base; then
+      warn "El proceso base terminó antes de confirmar el robot:"
+      tail -n 100 "$LOG_DIR/base.log" || true
+      fail "La simulación base terminó durante la inserción del robot."
+    fi
+    sleep 1
+  done
+
+  warn "No se recibió confirmación de inserción en ${limit}s:"
+  tail -n 120 "$LOG_DIR/base.log" || true
+  fail "No se confirmó la presencia del robot en Gazebo."
+}
+wait_for_robot_spawn 90
+
+wait_for_ros2_controllers(){
+  local limit="${1:-75}" output
+  info "Esperando controladores diferenciales activos..."
+  for ((s=1; s<=limit; s++)); do
+    output="$(timeout 4 ros2 control list_controllers 2>/dev/null || true)"
+    if grep -Eq 'joint_state_broadcaster.*active' <<<"$output" \
+       && grep -Eq 'diff_drive_controller.*active' <<<"$output"; then
+      info "joint_state_broadcaster y diff_drive_controller están activos."
+      return 0
+    fi
+    if ! managed_alive base; then
+      warn "La base terminó mientras se activaban los controladores:"
+      tail -n 100 "$LOG_DIR/base.log" || true
+      fail "No se pudo activar el control del robot."
+    fi
+    sleep 1
+  done
+
+  warn "Los controladores no llegaron a estado active:"
+  printf '%s\n' "$output"
+  tail -n 120 "$LOG_DIR/base.log" || true
+  fail "El robot fue insertado, pero ros2_control no quedó operativo."
+}
+wait_for_ros2_controllers 75
+
 # La base crea rosbridge y los nodos web después de 8 s en main.launch.py.
 # La navegación no se usa como condición para abrir la interfaz.
 wait_port 9090 15 "Rosbridge" || true
