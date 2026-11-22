@@ -211,6 +211,21 @@ fi
 
 echo
 echo "=========================================================="
+if [[ "$NAV2_READY" != "true" || "$DIAGNOSTIC_RC" -ne 0 ]]; then
+  echo
+  echo "=========================================================="
+  echo "           DIF_BOT OS - DESPLIEGUE PARCIAL"
+  echo "=========================================================="
+  echo "La simulación y la interfaz se conservan para diagnóstico."
+  echo "Nav2 listo             : $NAV2_READY"
+  echo "Código diagnóstico     : $DIAGNOSTIC_RC"
+  echo "Contenedor             : $CONTAINER"
+  echo "Captura                : $DIAG_CAPTURE"
+  echo
+  echo "No se declara teleoperación ni navegación autónoma funcional."
+  echo "Corrige los fallos indicados arriba antes de aceptar el despliegue."
+  exit 2
+fi
 echo "              DIF_BOT OS - DESPLIEGUE COMPLETADO"
 echo "=========================================================="
 echo "Repositorio WSL : $PROJECT_DIR"

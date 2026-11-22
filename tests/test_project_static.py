@@ -387,3 +387,6 @@ def test_wsl_deployer_captures_diagnostics_outside_root_owned_logs_directory():
     assert 'cat "$DIAG_CAPTURE"' in deploy
     assert 'logs/post_deploy_diagnostic.log' not in deploy
     assert 'tail -n 160 "$f"' in deploy
+    assert 'DIF_BOT OS - DESPLIEGUE PARCIAL' in deploy
+    assert 'No se declara teleoperación ni navegación autónoma funcional.' in deploy
+    assert 'exit 2' in deploy
