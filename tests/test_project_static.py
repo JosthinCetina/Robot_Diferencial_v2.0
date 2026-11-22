@@ -252,6 +252,18 @@ def test_github_publish_and_docker_clone_workflows_exist():
     assert 'ROS_DOMAIN_ID' in (ROOT / 'docker-run.sh').read_text()
 
 
+def test_wsl_deployer_updates_existing_repo_and_preserves_named_volume():
+    deploy = (ROOT / 'deploy_wsl.sh').read_text()
+    assert 'Robot_Diferencial_v2.0.git' in deploy
+    assert 'git clone --branch' in deploy
+    assert 'git pull --ff-only' in deploy
+    assert 'docker build -t' in deploy
+    assert 'colcon build' in deploy
+    assert 'npm ci' in deploy and 'npm run build' in deploy
+    assert 'START_DIF_BOT.sh' in deploy
+    assert 'docker volume rm' not in deploy
+
+
 def test_ci_workflow_covers_static_checks_and_jazzy_build():
     workflow = (
         ROOT / '.github/workflows/static-validation.yml'

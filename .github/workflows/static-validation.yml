@@ -21,7 +21,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-          cache: pip
 
       - name: Install test dependencies
         run: python -m pip install --upgrade pytest PyYAML
@@ -33,7 +32,7 @@ jobs:
         run: |
           bash -n START_DIF_BOT.sh STOP_DIF_BOT.sh DIAGNOSTIC_DIF_BOT.sh
           bash -n scripts/*.sh
-          bash -n start_system.sh docker-build.sh docker-run.sh docker-clone-run.sh
+          bash -n start_system.sh docker-build.sh docker-run.sh docker-clone-run.sh deploy_wsl.sh
 
   ros2-build:
     name: Build and test ROS 2 Jazzy packages

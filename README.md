@@ -31,19 +31,35 @@ El script valida el remoto y la rama \`main\`, comprueba que el historial local 
 
 No incluyas tokens, claves, archivos \`.env\`, bolsas ROS ni logs en Git. \`.gitignore\` excluye artefactos de ejecución y diagnósticos locales.
 
-## 2. Descargarlo y ejecutarlo en Docker
+## 2. Descargar todo el proyecto en WSL2 y desplegarlo
 
-Para clonar el repositorio público en WSL2 desde una carpeta que contenga \`docker-clone-run.sh\`:
+Requisito: Docker Desktop abierto, con integración WSL habilitada para la distribución en la que se ejecutará el script. Git y Docker CLI deben estar disponibles dentro de WSL.
+
+Desde Ubuntu/WSL, descarga y ejecuta el instalador:
 
 \`\`\`bash
-./docker-clone-run.sh https://github.com/JosthinCetina/Robot_Diferencial_v2.0.git main
+curl -fsSL -o /tmp/deploy_dif_bot_wsl.sh https://raw.githubusercontent.com/JosthinCetina/Robot_Diferencial_v2.0/main/deploy_wsl.sh
+bash /tmp/deploy_dif_bot_wsl.sh
 \`\`\`
 
-El script construye la imagen \`dif-bot-os:jazzy\`, crea el volumen persistente \`difbot_jazzy_ws\`, clona el repositorio dentro de \`/ros2_ws\` y abre el contenedor \`dif-bot-os-jazzy\`. El volumen conserva el workspace al cerrar el contenedor. Al volver a ejecutar el script, se actualiza \`main\` mediante \`git pull --ff-only\`.
+El script descarga el repositorio completo en \`~/difbot_deployment/Robot_Diferencial_v2.0\`, actualiza ese checkout con \`git pull --ff-only\` cuando ya existe, construye \`dif-bot-os:jazzy\`, instala dependencias, compila los seis paquetes ROS 2, construye el frontend y despliega el sistema.
 
-Para un checkout local existente, usa \`docker-build.sh\` y \`docker-run.sh\`. No borres el volumen persistente si quieres conservar el workspace.
+El checkout de desarrollo existente en \`~/github/Robot_Diferencial_v2.0\` no se sobrescribe. El contenedor monta directamente el checkout descargado en WSL en \`/ros2_ws\`, de forma que el código desplegado permanece visible en el sistema de archivos WSL. El contenedor se llama \`dif-bot-os-jazzy\`.
 
-El entorno usa \`ROS_DOMAIN_ID=42\` por defecto para aislar el tráfico DDS. La interfaz gráfica de Gazebo depende de que Docker Desktop/WSL2 tenga acceso gráfico funcional; para depurar el comportamiento de ROS, RViz y Nav2 se debe priorizar un entorno con carga de CPU controlada.
+El script detiene únicamente una instancia anterior con ese mismo nombre y no elimina el volumen histórico \`difbot_jazzy_ws\`. Si el checkout específico de despliegue tiene modificaciones locales, el script se detiene para no sobrescribirlas.
+
+Al finalizar, abre \`http://localhost:3000\`; rosbridge usa \`ws://localhost:9090\`. Los logs se guardan en \`~/difbot_deployment/Robot_Diferencial_v2.0/logs/\`.
+
+Si necesitas cambiar la carpeta de despliegue, define \`DIFBOT_DEPLOY_ROOT\` antes de ejecutar el script. Para cambiar el dominio DDS, define \`ROS_DOMAIN_ID\` (por defecto \`42\`).
+
+Para detener los nodos dentro del contenedor:
+
+\`\`\`bash
+docker exec dif-bot-os-jazzy bash -lc 'cd /ros2_ws && ./STOP_DIF_BOT.sh'
+docker stop dif-bot-os-jazzy
+\`\`\`
+
+El método de clonación con volumen nombrado \`docker-clone-run.sh\` sigue disponible para uso manual, pero el desplegador WSL es el método recomendado cuando se desea mantener una copia completa y editable del proyecto en WSL.
 
 ## 3. Instalar dependencias y compilar
 
