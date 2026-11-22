@@ -165,13 +165,13 @@ fi
 
 info "Dando tiempo a Nav2 para completar el arranque (máx. 60 s)..."
 NAV2_READY=false
-for _ in {1..20}; do
-  ACTIONS="$(docker exec "$CONTAINER" bash -lc 'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && RCUTILS_COLORIZED_OUTPUT=0 timeout 4 ros2 action list' 2>/dev/null || true)"
+for _ in {1..30}; do
+  ACTIONS="$(docker exec "$CONTAINER" bash -lc 'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && RCUTILS_COLORIZED_OUTPUT=0 timeout 1 ros2 action list' 2>/dev/null || true)"
   if grep -Fxq '/navigate_to_pose' <<<"$ACTIONS"; then
     NAV2_READY=true
     break
   fi
-  sleep 3
+  sleep 1
 done
 
 # Capture to a user-writable /tmp file, never to /ros2_ws/logs (root-owned

@@ -390,3 +390,11 @@ def test_wsl_deployer_captures_diagnostics_outside_root_owned_logs_directory():
     assert 'DIF_BOT OS - DESPLIEGUE PARCIAL' in deploy
     assert 'No se declara teleoperación ni navegación autónoma funcional.' in deploy
     assert 'exit 2' in deploy
+
+
+def test_deployer_nav2_readiness_wait_is_bounded():
+    deploy = (ROOT / 'deploy_wsl.sh').read_text()
+    assert 'for _ in {1..30}; do' in deploy
+    assert 'timeout 1 ros2 action list' in deploy
+    assert 'NAV2_READY=false' in deploy
+    assert 'DESPLIEGUE PARCIAL' in deploy
