@@ -36,6 +36,9 @@ def test_package_manifests_are_valid_and_unique():
         root = ET.parse(path).getroot()
         names.append(root.findtext('name'))
         assert root.findtext('version') == '2.0.0'
+        if root.findtext('name') == 'dif_bot_navigation':
+            deps = {node.text for node in root.findall('exec_depend')}
+            assert 'action_msgs' in deps
     assert len(names) == 6
     assert len(names) == len(set(names))
 
