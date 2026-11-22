@@ -8,16 +8,16 @@ BRANCH="main"
 IMAGE="dif-bot-os:jazzy"
 CONTAINER="dif-bot-os-jazzy"
 VOLUME="difbot_jazzy_ws"
-DEPLOY_ROOT="\${DIFBOT_DEPLOY_ROOT:-$HOME/difbot_deployment}"
+DEPLOY_ROOT="${DIFBOT_DEPLOY_ROOT:-$HOME/difbot_deployment}"
 PROJECT_DIR="$DEPLOY_ROOT/Robot_Diferencial_v2.0"
-ROS_DOMAIN_ID_VALUE="\${ROS_DOMAIN_ID:-42}"
+ROS_DOMAIN_ID_VALUE="${ROS_DOMAIN_ID:-42}"
 
 info() { printf '\033[0;32m[DIF_BOT DEPLOY]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[AVISO]\033[0m %s\n' "$*" >&2; }
 fail() { printf '\033[0;31m[ERROR]\033[0m %s\n' "$*" >&2; exit 1; }
 
 is_wsl=false
-if [[ -n "\${WSL_DISTRO_NAME:-}" ]] || grep -qiE 'microsoft|wsl' /proc/sys/kernel/osrelease 2>/dev/null; then
+if [[ -n "${WSL_DISTRO_NAME:-}" ]] || grep -qiE 'microsoft|wsl' /proc/sys/kernel/osrelease 2>/dev/null; then
   is_wsl=true
 fi
 [[ "$is_wsl" == "true" ]] || warn "No se detectó WSL. El script continuará si Docker tiene acceso a la GUI."
@@ -91,9 +91,9 @@ ARGS=(
   --restart unless-stopped
   --network host
   -e "ROS_DOMAIN_ID=$ROS_DOMAIN_ID_VALUE"
-  -e "DISPLAY=\${DISPLAY:-:0}"
-  -e "WAYLAND_DISPLAY=\${WAYLAND_DISPLAY:-wayland-0}"
-  -e "XDG_RUNTIME_DIR=\${XDG_RUNTIME_DIR:-/mnt/wslg/runtime-dir}"
+  -e "DISPLAY=${DISPLAY:-:0}"
+  -e "WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-0}"
+  -e "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/mnt/wslg/runtime-dir}"
   -e QT_X11_NO_MITSHM=1
   -v "$PROJECT_DIR:/ros2_ws"
   -w /ros2_ws
@@ -109,7 +109,7 @@ if [[ -d /dev/dri ]]; then
 fi
 
 info "Creando contenedor con el proyecto montado desde WSL..."
-docker "\${ARGS[@]}" "$IMAGE" bash -lc 'while true; do sleep 3600; done'
+docker "${ARGS[@]}" "$IMAGE" bash -lc 'while true; do sleep 3600; done'
 
 info "Instalando dependencias ROS, compilando workspace y construyendo frontend..."
 docker exec "$CONTAINER" bash -lc '

@@ -247,6 +247,7 @@ def test_github_publish_and_docker_clone_workflows_exist():
     assert 'Robot_Diferencial_v2.0' in publish
     assert 'gh repo create' not in publish
     assert 'git push origin main' in publish
+    assert r'\${' not in publish
     assert 'git clone --branch' in clone
     assert 'ROS_DOMAIN_ID' in clone
     assert 'ROS_DOMAIN_ID' in (ROOT / 'docker-run.sh').read_text()
@@ -262,6 +263,7 @@ def test_wsl_deployer_updates_existing_repo_and_preserves_named_volume():
     assert 'npm ci' in deploy and 'npm run build' in deploy
     assert 'START_DIF_BOT.sh' in deploy
     assert 'docker volume rm' not in deploy
+    assert r'\${' not in deploy
 
 
 def test_ci_workflow_covers_static_checks_and_jazzy_build():

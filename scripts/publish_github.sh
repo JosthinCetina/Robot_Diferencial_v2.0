@@ -6,7 +6,7 @@ EXPECTED_HTTPS="https://github.com/JosthinCetina/Robot_Diferencial_v2.0.git"
 EXPECTED_SSH="git@github.com:JosthinCetina/Robot_Diferencial_v2.0.git"
 DRY_RUN=false
 
-if [[ "\${1:-}" == "--dry-run" ]]; then
+if [[ "${1:-}" == "--dry-run" ]]; then
   DRY_RUN=true
 elif [[ $# -gt 0 ]]; then
   echo "Uso: ./scripts/publish_github.sh [--dry-run]" >&2
