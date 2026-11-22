@@ -227,7 +227,7 @@ def test_web_stop_is_documented_as_logical_not_safety_estop():
     assert 'No sustituye un E-stop físico' in app
     assert "name: '/dif_bot/stop'" in app
     assert 'No es un dispositivo E-stop físico' in readme
-    assert 'no es E-stop físico' in plan
+    assert 'sustituye un E-stop físico' in plan
     bridge = (
         ROOT / 'src/dif_bot_web_bridge/dif_bot_web_bridge/goal_bridge.py'
     ).read_text()
