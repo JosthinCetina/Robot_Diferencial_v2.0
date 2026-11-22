@@ -25,7 +25,6 @@ fi
 command -v git >/dev/null 2>&1 || fail "Falta Git en WSL. Instálalo con: sudo apt update && sudo apt install -y git"
 command -v docker >/dev/null 2>&1 || fail "No se encontró Docker CLI. Activa la integración WSL de Docker Desktop."
 docker info >/dev/null 2>&1 || fail "Docker no está disponible. Abre Docker Desktop y habilita la integración con esta distribución WSL."
-command -v curl >/dev/null 2>&1 || fail "Falta curl."
 
 mkdir -p "$DEPLOY_ROOT"
 
@@ -88,7 +87,6 @@ fi
 ARGS=(
   run -d
   --name "$CONTAINER"
-  --restart unless-stopped
   --network host
   -e "ROS_DOMAIN_ID=$ROS_DOMAIN_ID_VALUE"
   -e "DISPLAY=${DISPLAY:-:0}"
@@ -127,6 +125,20 @@ docker exec "$CONTAINER" bash -lc '
 
 info "Iniciando DIF_BOT OS (Gazebo, rosbridge, interfaz web, EKF y Nav2)..."
 docker exec "$CONTAINER" bash -lc 'cd /ros2_ws && ./START_DIF_BOT.sh'
+
+if ! docker exec "$CONTAINER" bash -lc '
+  set -e
+  for id in base nav web; do
+    pidfile="/tmp/dif_bot_os/$id.pid"
+    [[ -s "$pidfile" ]] || { echo "Falta PID de $id"; exit 1; }
+    pid="$(cat "$pidfile")"
+    kill -0 "$pid" || { echo "El proceso $id (PID=$pid) no está activo"; exit 1; }
+  done
+'; then
+  warn "Uno de los procesos gestionados no quedó activo. Se conservan los logs."
+  docker exec "$CONTAINER" bash -lc 'for f in /ros2_ws/logs/base.log /ros2_ws/logs/navigation.log /ros2_ws/logs/web.log; do echo "===== $f ====="; tail -n 60 "$f" 2>/dev/null || true; done'
+  fail "Despliegue incompleto: base, navegación y web no quedaron activos."
+fi
 
 wait_for_port() {
   local port="$1"

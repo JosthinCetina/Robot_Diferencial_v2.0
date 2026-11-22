@@ -262,6 +262,7 @@ def test_wsl_deployer_updates_existing_repo_and_preserves_named_volume():
     assert 'colcon build' in deploy
     assert 'npm ci' in deploy and 'npm run build' in deploy
     assert 'START_DIF_BOT.sh' in deploy
+    assert 'for id in base nav web' in deploy
     assert 'docker volume rm' not in deploy
     assert r'\${' not in deploy
 
