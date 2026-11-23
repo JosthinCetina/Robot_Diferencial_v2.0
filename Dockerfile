@@ -1,6 +1,5 @@
 FROM ros:jazzy-ros-base
-ENV DEBIAN_FRONTEND=noninteractive \
-    RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+ENV DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-c"]
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-desktop \
@@ -13,7 +12,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-joint-state-broadcaster \
     ros-jazzy-robot-localization \
     ros-jazzy-navigation2 \
-    ros-jazzy-rmw-cyclonedds-cpp \
     ros-jazzy-nav2-bringup \
     ros-jazzy-nav2-simple-commander \
     ros-jazzy-nav2-rviz-plugins \
