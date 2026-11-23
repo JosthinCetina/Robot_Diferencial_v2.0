@@ -33,19 +33,32 @@ mkdir -p "$DEPLOY_ROOT"
 # Repair only Git metadata before host-side Git operations; do not chown source/build files.
 repair_git_metadata_ownership() {
   local git_dir="$PROJECT_DIR/.git"
-  local current_uid current_gid foreign_entry
+  local current_uid current_gid foreign_entry traversal_failed
   current_uid="$(id -u)"
   current_gid="$(id -g)"
 
   [[ -d "$git_dir" ]] || return 0
-  foreign_entry="$(find "$git_dir" -xdev ! -uid "$current_uid" -print -quit 2>/dev/null || true)"
-  if [[ -n "$foreign_entry" ]]; then
-    warn "Se detectaron archivos de Git que no pertenecen al usuario actual."
-    warn "Corrigiendo propietario únicamente en $git_dir (UID:GID ${current_uid}:${current_gid})."
-    command -v sudo >/dev/null 2>&1 || fail "Se necesita sudo para reparar la propiedad de $git_dir."
-    sudo chown -R "$current_uid:$current_gid" "$git_dir" || fail "No se pudo reparar la propiedad de $git_dir."
+
+  # A root-owned 0700 directory can prevent an unprivileged find from seeing
+  # the root-owned entries below it. Detect incomplete traversal explicitly.
+  traversal_failed=false
+  if ! find "$git_dir" -xdev -print >/dev/null 2>&1; then
+    traversal_failed=true
   fi
+  foreign_entry="$(find "$git_dir" -xdev ! -uid "$current_uid" -print -quit 2>/dev/null || true)"
+
+  if [[ "$traversal_failed" == "true" || -n "$foreign_entry" ]]; then
+    warn "Se detectaron metadatos Git con propietario o permisos incompatibles."
+    warn "Reparando únicamente $git_dir (UID:GID ${current_uid}:${current_gid})."
+    command -v sudo >/dev/null 2>&1 || fail "Se necesita sudo para reparar $git_dir."
+    sudo chown -R "$current_uid:$current_gid" "$git_dir" || fail "No se pudo reparar el propietario de $git_dir."
+    sudo chmod -R u+rwX "$git_dir" || fail "No se pudieron reparar los permisos de $git_dir."
+  fi
+
   [[ -w "$git_dir/objects" ]] || fail "El usuario actual aún no puede escribir en $git_dir/objects."
+  if find "$git_dir/objects" -xdev -type d ! -writable -print -quit 2>/dev/null | grep -q .; then
+    fail "Hay subdirectorios de objetos Git que aún no permiten escritura: ejecuta sudo chown -R \"$(id -u):$(id -g)\" \"$git_dir\" && sudo chmod -R u+rwX \"$git_dir\"."
+  fi
 }
 
 # Download the complete repository into a dedicated deployment checkout.
