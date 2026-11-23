@@ -5,8 +5,6 @@ WORKSPACE=/ros2_ws
 PID_DIR=/tmp/dif_bot_os
 LOG_DIR="$WORKSPACE/logs"
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-42}"
-# Use Cyclone DDS to avoid Fast DDS service-reply discovery races during lifecycle startup.
-export RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}"
 mkdir -p "$PID_DIR" "$LOG_DIR"
 
 info(){ printf '\033[0;32m[DIF_BOT]\033[0m %s\n' "$*"; }
@@ -102,10 +100,9 @@ port_open 9090 && fail "El puerto 9090 ya está ocupado. Ejecuta ./STOP_DIF_BOT.
 port_open 3000 && fail "El puerto 3000 ya está ocupado. Ejecuta ./STOP_DIF_BOT.sh para limpiar instancias anteriores."
 
 info "ROS 2 Jazzy | ROS_DOMAIN_ID=$ROS_DOMAIN_ID"
-# En WSL2 con recursos limitados, Gazebo nativo DiffDrive evita el bloqueo
-# del switch de controllers de gz_ros2_control durante la inicialización.
-# Se puede recuperar el modo ros2_control explícitamente con USE_ROS2_CONTROL=true.
-USE_ROS2_CONTROL="${USE_ROS2_CONTROL:-false}"
+# Restore the ros2_control configuration used when Nav2 point-to-point goals
+# were confirmed SUCCEEDED on 2026-11-22.
+USE_ROS2_CONTROL="${USE_ROS2_CONTROL:-true}"
 info "Arrancando la simulación BASE sin Nav2 (use_ros2_control=$USE_ROS2_CONTROL)..."
 start_managed base "$LOG_DIR/base.log" ros2 launch dif_bot_bringup main.launch.py \
   use_sim_time:=true use_ros2_control:="$USE_ROS2_CONTROL" launch_navigation:=false
