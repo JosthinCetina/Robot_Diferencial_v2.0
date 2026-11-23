@@ -215,7 +215,6 @@ class GoalBridgeNode(Node):
                     0.0,
                     (self.get_clock().now() - pose_stamp).nanoseconds / 1e9,
                 )
-            pose_age = max(pose_age_wall, pose_age_ros)
             geometry = None
 
             if (
