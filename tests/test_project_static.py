@@ -373,8 +373,12 @@ def test_xy_only_web_goal_preserves_current_yaw_and_allows_explicit_yaw():
 
 def test_web_pose_and_goal_bridge_preserve_simulation_time_stamps():
     launch = (ROOT / 'src/dif_bot_bringup/launch/main.launch.py').read_text()
-    pose_node = launch.split("executable='robot_pose'", 1)[1].split('\n', 1)[0]
-    goal_node = launch.split("executable='goal_bridge'", 1)[1].split('\n', 1)[0]
+    pose_node = launch.split("robot_pose = Node", 1)[1].split(
+        "goal_bridge = Node", 1
+    )[0]
+    goal_node = launch.split("goal_bridge = Node", 1)[1].split(
+        "\n\n    nav", 1
+    )[0]
     assert "parameters=[{'use_sim_time': use_sim_time}]" in pose_node
     assert "parameters=[{'use_sim_time': use_sim_time}]" in goal_node
 
