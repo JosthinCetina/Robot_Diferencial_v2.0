@@ -134,10 +134,13 @@ def test_nav2_lifecycle_startup_waits_for_dds_discovery_and_starts_in_order():
     assert helper.index("'/lifecycle_manager_localization/manage_nodes'") < helper.index("'/lifecycle_manager_navigation/manage_nodes'")
     assert 'TRANSITION_TIMEOUT_SEC = 180.0' in helper
     assert 'SingleThreadedExecutor' in helper
-    assert 'executor.spin_until_future_complete(' in helper
+    assert 'executor.spin_once(timeout_sec=0.1)' in helper
+    assert 'executor.spin_until_future_complete(' not in helper
     assert 'Enviando STARTUP a' in helper
     assert 'STARTUP respondió success=true' in helper
     assert 'rclpy.spin_once(self' not in helper
+    assert 'node.destroy_client(client)' not in helper
+    assert 'executor.remove_node(node)' in helper
 
 
 
