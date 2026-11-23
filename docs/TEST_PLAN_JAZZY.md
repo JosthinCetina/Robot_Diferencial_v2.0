@@ -1,5 +1,17 @@
 # Plan de pruebas e integración — dif_bot OS v2.0 (Jazzy)
 
+> **Estado de ejecución actualizado — 22 de noviembre de 2026 (hora Colombia).**
+>
+> - Despliegue incremental y arranque de base/controladores: validado.
+> - Teleoperación web sostenida: validada por prueba funcional del usuario.
+> - Objetivo web `[1, 1, DEFAULT]`: `NavigateToPose` terminó `SUCCEEDED`.
+> - Objetivo web `[1, 1, 5°]`: `NavigateToPose` terminó `SUCCEEDED`; valida orientación final en la misma posición XY, no un recorrido largo.
+> - Los timeouts de acciones internas del BT Navigator se corrigieron de 20 ms a 1000 ms; `default_cancel_timeout` también quedó explícito en 1000 ms.
+> - El registro de una ejecución anterior mostró TF con 520 ms de antigüedad y errores intermitentes de frecuencia del EKF; la cadena temporal aún no está aprobada.
+> - Misión secuencial, SLAM, convergencia AMCL y comparación entre modos de tracción todavía no tienen evidencia funcional.
+>
+> No declarar terminada una fase por compilación. Esta sección registra pruebas reportadas; las fases pendientes requieren evidencia de ejecución.
+
 Este documento es la secuencia de aceptación técnica. Marca cada resultado con fecha, modo de control y evidencia (captura, log o bag). No se debe declarar una fase aprobada por el mero hecho de compilar.
 
 ## Fase 0 — Entorno aislado y reproducible
