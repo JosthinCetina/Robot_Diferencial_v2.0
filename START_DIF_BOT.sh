@@ -193,7 +193,7 @@ fi
 # Levanta primero la web, sin esperar a que Nav2 esté listo.
 info "Arrancando la interfaz web..."
 start_managed web "$LOG_DIR/web.log" npm --prefix "$WORKSPACE/web" run preview -- --host 0.0.0.0 --port 3000
-if ! wait_port 3000 20 "Interfaz web HTTP"; then
+if ! wait_port 3000 45 "Interfaz web HTTP"; then
   warn "Vite Preview no abrió HTTP 3000. Registro del frontend:"
   tail -n 120 "$LOG_DIR/web.log" 2>/dev/null || true
   fail "No se inicia Nav2: la interfaz de teleoperación no está disponible."
