@@ -96,6 +96,18 @@ def test_nav2_jazzy_behavior_topics_and_stamped_mode():
     assert nav['controller_server']['ros__parameters']['odom_topic'] == '/odom_filtered'
 
 
+def test_nav2_bt_action_ack_and_cancel_timeouts_are_wsl_tolerant():
+    nav = yaml.safe_load(
+        (ROOT / 'src/dif_bot_navigation/config/nav2_params.yaml').read_text()
+    )
+    bt = nav['bt_navigator']['ros__parameters']
+    # Nav2 Jazzy expresses these BT action timeouts in milliseconds.
+    # Twenty milliseconds caused false failures under WSL2 scheduling delays.
+    assert bt['default_server_timeout'] >= 1000
+    assert bt['default_cancel_timeout'] >= 1000
+    assert bt['wait_for_service_timeout'] >= 1000
+
+
 def test_nav2_lifecycle_has_extended_bond_timeout():
     launch = (
         ROOT / 'src/dif_bot_navigation/launch/navigation.launch.py'
