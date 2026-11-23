@@ -80,7 +80,10 @@ if [[ -d "$PROJECT_DIR/.git" ]]; then
   [[ "$(git branch --show-current)" == "$BRANCH" ]] || fail "El checkout de despliegue debe estar en la rama $BRANCH."
   [[ -z "$(git status --porcelain)" ]] || fail "El checkout de despliegue contiene cambios locales. No se sobrescribirán; revisa $PROJECT_DIR."
   git fetch origin "$BRANCH"
-  git pull --ff-only origin "$BRANCH"
+  # This is a dedicated deployment checkout, not the user's development checkout.
+  # main may be force-reset to a known-good runtime baseline; after the clean-tree
+  # check above, hard-sync this checkout to the exact remote branch tip.
+  git reset --hard "origin/$BRANCH"
 elif [[ -e "$PROJECT_DIR" ]]; then
   fail "Existe $PROJECT_DIR, pero no es un checkout Git. Muévelo o define DIFBOT_DEPLOY_ROOT."
 else
