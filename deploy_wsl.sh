@@ -28,10 +28,44 @@ docker info >/dev/null 2>&1 || fail "Docker no está disponible. Abre Docker Des
 
 mkdir -p "$DEPLOY_ROOT"
 
+# Docker runs build/runtime commands as root against this WSL bind mount.
+# A previous Git operation inside the container may leave .git/objects owned by root.
+# Repair only Git metadata before host-side Git operations; do not chown source/build files.
+repair_git_metadata_ownership() {
+  local git_dir="$PROJECT_DIR/.git"
+  local current_uid current_gid foreign_entry traversal_failed
+  current_uid="$(id -u)"
+  current_gid="$(id -g)"
+
+  [[ -d "$git_dir" ]] || return 0
+
+  # A root-owned 0700 directory can prevent an unprivileged find from seeing
+  # the root-owned entries below it. Detect incomplete traversal explicitly.
+  traversal_failed=false
+  if ! find "$git_dir" -xdev -print >/dev/null 2>&1; then
+    traversal_failed=true
+  fi
+  foreign_entry="$(find "$git_dir" -xdev ! -uid "$current_uid" -print -quit 2>/dev/null || true)"
+
+  if [[ "$traversal_failed" == "true" || -n "$foreign_entry" ]]; then
+    warn "Se detectaron metadatos Git con propietario o permisos incompatibles."
+    warn "Reparando únicamente $git_dir (UID:GID ${current_uid}:${current_gid})."
+    command -v sudo >/dev/null 2>&1 || fail "Se necesita sudo para reparar $git_dir."
+    sudo chown -R "$current_uid:$current_gid" "$git_dir" || fail "No se pudo reparar el propietario de $git_dir."
+    sudo chmod -R u+rwX "$git_dir" || fail "No se pudieron reparar los permisos de $git_dir."
+  fi
+
+  [[ -w "$git_dir/objects" ]] || fail "El usuario actual aún no puede escribir en $git_dir/objects."
+  if find "$git_dir/objects" -xdev -type d ! -writable -print -quit 2>/dev/null | grep -q .; then
+    fail "Hay subdirectorios de objetos Git que aún no permiten escritura: ejecuta sudo chown -R \"$(id -u):$(id -g)\" \"$git_dir\" && sudo chmod -R u+rwX \"$git_dir\"."
+  fi
+}
+
 # Download the complete repository into a dedicated deployment checkout.
 # This does not overwrite the user's existing ~/github/Robot_Diferencial_v2.0 checkout.
 if [[ -d "$PROJECT_DIR/.git" ]]; then
   info "Actualizando checkout de despliegue: $PROJECT_DIR"
+  repair_git_metadata_ownership
   cd "$PROJECT_DIR"
 
   REMOTE="$(git remote get-url origin 2>/dev/null || true)"
