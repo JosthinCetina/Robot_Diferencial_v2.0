@@ -371,6 +371,24 @@ def test_xy_only_web_goal_preserves_current_yaw_and_allows_explicit_yaw():
     assert 'orientation: { w: 1.0 }' not in app
 
 
+def test_web_pose_and_goal_bridge_preserve_simulation_time_stamps():
+    launch = (ROOT / 'src/dif_bot_bringup/launch/main.launch.py').read_text()
+    pose_node = launch.split("executable='robot_pose'", 1)[1].split('\n', 1)[0]
+    goal_node = launch.split("executable='goal_bridge'", 1)[1].split('\n', 1)[0]
+    assert "parameters=[{'use_sim_time': use_sim_time}]" in pose_node
+    assert "parameters=[{'use_sim_time': use_sim_time}]" in goal_node
+
+    pose_source = (
+        ROOT / 'src/dif_bot_web_bridge/dif_bot_web_bridge/robot_pose.py'
+    ).read_text()
+    bridge = (
+        ROOT / 'src/dif_bot_web_bridge/dif_bot_web_bridge/goal_bridge.py'
+    ).read_text()
+    assert 'pose_msg.header.stamp = t.header.stamp' in pose_source
+    assert 'goal_msg.pose.header.stamp = self.get_clock().now().to_msg()' in bridge
+    assert 'Time.from_msg(' in bridge
+    assert 'pose_age_ros <= 2.0' in bridge
+
 def test_goal_bridge_validates_map_frame_and_normalizes_quaternion():
     bridge = (
         ROOT / 'src/dif_bot_web_bridge/dif_bot_web_bridge/goal_bridge.py'
