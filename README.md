@@ -7,12 +7,14 @@ Repositorio de desarrollo: **[JosthinCetina/Robot_Diferencial_v2.0](https://gith
 ## Arquitectura
 
 - ROS 2 Jazzy / Ubuntu 24.04 / Gazebo Harmonic.
+- Middleware DDS del contenedor: `rmw_cyclonedds_cpp`, seleccionado para evitar la carrera conocida de respuestas de servicios Fast DDS durante transiciones lifecycle de Nav2.
 - Gazebo Sim y \`ros_gz_bridge\`: sensores \`/scan\`, \`/imu/data\`, \`/camera/image\`.
 - Modo principal (\`use_ros2_control:=true\`): URDF \`<ros2_control>\`, \`gz_ros2_control/GazeboSimSystem\`, \`controller_manager\`, \`joint_state_broadcaster\` y \`diff_drive_controller\`.
 - Modo comparativo (\`use_ros2_control:=false\`): plugin DiffDrive nativo de Gazebo Sim, sin \`ros2_control\`.
 - Ambos modos normalizan la odometría bruta en \`/odom_raw\`; el EKF publica \`/odom_filtered\` y la única TF \`odom -> base_footprint\`.
 - \`twist_mux\` arbitra teclado/web/control de pose/Nav2 con prioridades y timeout.
 - Nav2: AMCL, NavFn, DWB y Behavior Server; SLAM Toolbox para generar mapas.
+- El arranque lifecycle usa `rmw_cyclonedds_cpp`; Fast DDS tiene una carrera documentada de descubrimiento de respuestas de servicios en sistemas que levantan muchos nodos simultáneamente.
 - Misión Python mediante \`nav2_simple_commander\`, servicio \`/start_autonomous_mission\` y waypoints YAML.
 - React/Vite/roslibjs vía rosbridge WebSocket \`9090\`; interfaz web en \`3000\`.
 
