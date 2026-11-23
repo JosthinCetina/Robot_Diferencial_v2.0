@@ -11,7 +11,7 @@
 > - Timeouts internos del BT Navigator: configurados explícitamente en 1000 ms (`default_server_timeout`, `default_cancel_timeout` y `wait_for_service_timeout`); se añadió prueba estática de regresión. La validación funcional posterior es positiva, pero no se ha aislado cuánto de la mejora corresponde a este cambio.
 > - Diagnóstico anterior: TF `odom -> map` llegó 520 ms atrasada respecto al dato consultado; EKF a 30 Hz reportó actualizaciones de 34–94 ms y el controlador Nav2 incumplió su ciclo de 10 Hz bajo carga. Son síntomas de planificación temporal/carga, no prueba de que cada navegación falle.
 > - Pendientes funcionales: navegación repetida/robustez, TF y sincronización, misión secuencial, SLAM con mapa generado, convergencia AMCL y comparación de los dos modos de tracción.
-> - EKF: pendiente de optimización basada en medición. No reducir frecuencia ni alterar covarianzas sin capturar primero datos comparables.
+> - EKF: configuración ajustada de 30 a 20 Hz porque los logs medidos mostraron 34–94 ms por actualización frente a un presupuesto de 33 ms a 30 Hz. Se conserva `sensor_timeout=0.20` y las colas; falta validar en ejecución si disminuyen los incumplimientos sin degradar la localización. No se alteraron covarianzas.
 >
 > **Trabajo en paralelo:** mientras se ejecutan pruebas funcionales puntuales, revisar en código la cadena de timestamps/TF, el coste de EKF y los límites de la misión; los experimentos de SLAM y AMCL se ejecutan en sesiones mutuamente excluyentes con Nav2 para evitar dos autoridades de localización simultáneas.
 >
