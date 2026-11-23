@@ -5,6 +5,7 @@ import time
 
 import rclpy
 from nav2_msgs.srv import ManageLifecycleNodes
+from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
 
 
@@ -42,14 +43,15 @@ class LifecycleStartup(Node):
                     f'en {SERVICE_DISCOVERY_TIMEOUT_SEC:.0f}s.'
                 )
 
-    def _start_manager(self, service_name, client):
+    def _start_manager(self, service_name, client, executor):
         request = ManageLifecycleNodes.Request()
         request.command = ManageLifecycleNodes.Request.STARTUP
         future = client.call_async(request)
         deadline = time.monotonic() + TRANSITION_TIMEOUT_SEC
 
+        # Spin the executor, not the Node: callbacks complete the service future.
         while rclpy.ok() and not future.done() and time.monotonic() < deadline:
-            rclpy.spin_once(self, timeout_sec=0.1)
+            executor.spin_once(timeout_sec=0.1)
 
         if not future.done():
             client.remove_pending_request(future)
@@ -68,22 +70,17 @@ class LifecycleStartup(Node):
             f'Gestor de ciclo de vida activo: {service_name}'
         )
 
-    def start_all(self):
+    def start_all(self, executor):
         self._wait_for_manager_services()
-
-        # Nav2's lifecycle manager creates its internal service clients during
-        # startup. Give Fast DDS time to match those endpoints before STARTUP;
-        # otherwise a fast first transition can complete without its reply
-        # reaching the manager client.
         self.get_logger().info(
             f'Esperando {DISCOVERY_SETTLE_SEC:.0f}s para estabilizar DDS '
             'antes de activar los nodos.'
         )
         time.sleep(DISCOVERY_SETTLE_SEC)
 
-        # Localization must be active before the navigation costmaps/servers.
+        # Localization must be active before navigation costmaps and servers.
         for service_name in MANAGERS:
-            self._start_manager(service_name, self._clients[service_name])
+            self._start_manager(service_name, self._clients[service_name], executor)
 
         self.get_logger().info(
             'Localización y servidores Nav2 completaron STARTUP.'
@@ -93,16 +90,20 @@ class LifecycleStartup(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = LifecycleStartup()
+    executor = SingleThreadedExecutor()
+    executor.add_node(node)
     exit_code = 0
     try:
-        node.start_all()
+        node.start_all(executor)
     except Exception as exc:
         node.get_logger().error(f'Falló el arranque de Nav2: {exc}')
         exit_code = 1
     finally:
+        executor.remove_node(node)
         for client in node._clients.values():
             node.destroy_client(client)
         node.destroy_node()
+        executor.shutdown()
         if rclpy.ok():
             rclpy.shutdown()
     return exit_code
