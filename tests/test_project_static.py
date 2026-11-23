@@ -463,7 +463,7 @@ def test_simulation_defaults_reduce_wsl_load_without_removing_sensors():
 
 def test_wsl_deployer_avoids_local_expansion_inside_remote_shell():
     deploy = (ROOT / 'deploy_wsl.sh').read_text()
-    remote = deploy.split("docker exec \"$CONTAINER\" bash -lc '", 1)[1].split("\n'\n", 1)[0]
+    remote = deploy.split('docker exec "$CONTAINER" bash -lc \'\\n  set -eo pipefail', 1)[1].split("\\n'", 1)[0]
     assert "'" not in remote
     assert "awk '{print $1}'" not in deploy
     assert 'DIFBOT_SKIP_IMAGE_BUILD' in deploy
