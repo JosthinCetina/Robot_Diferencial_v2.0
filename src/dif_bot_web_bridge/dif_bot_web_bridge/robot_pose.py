@@ -24,7 +24,8 @@ class RobotPosePublisher(Node):
             t = self.tf_buffer.lookup_transform(target_frame, 'base_footprint', rclpy.time.Time())
 
             pose_msg = PoseStamped()
-            pose_msg.header.stamp = self.get_clock().now().to_msg()
+            # Preserve the timestamp of the TF sample; do not relabel an old transform as current.
+            pose_msg.header.stamp = t.header.stamp
             pose_msg.header.frame_id = target_frame
             pose_msg.pose.position.x = t.transform.translation.x
             pose_msg.pose.position.y = t.transform.translation.y
