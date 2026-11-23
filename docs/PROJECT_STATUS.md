@@ -20,6 +20,7 @@ Los nodos web que publican/consumen poses trabajan ahora con `use_sim_time`:
 - `robot_pose` conserva `t.header.stamp`, la marca temporal real de la transformación TF, en lugar de reemplazarla por la hora de publicación.
 - `goal_bridge` fecha la meta con su reloj ROS y verifica la antigüedad tanto por tiempo de recepción monotónico como por la marca temporal TF.
 - Se añadió una prueba estática para evitar que se pierda esta coherencia temporal.
+- La espera HTTP del frontend durante el arranque se amplió de 20 a 45 s tras un primer arranque donde Vite Preview tardó en abrir el puerto 3000.
 
 ## Incidencias conocidas que aún requieren validación
 
