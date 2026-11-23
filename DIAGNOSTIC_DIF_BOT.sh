@@ -4,7 +4,6 @@ set -uo pipefail
 WORKSPACE=/ros2_ws
 PID_DIR=/tmp/dif_bot_os
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-42}"
-export RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}"
 export RCUTILS_COLORIZED_OUTPUT=0
 set +u
 source /opt/ros/jazzy/setup.bash
