@@ -4,6 +4,7 @@ set -uo pipefail
 WORKSPACE=/ros2_ws
 PID_DIR=/tmp/dif_bot_os
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-42}"
+export RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}"
 export RCUTILS_COLORIZED_OUTPUT=0
 set +u
 source /opt/ros/jazzy/setup.bash
@@ -46,7 +47,7 @@ echo "============================================================"
 echo "       DIF_BOT OS — DIAGNÓSTICO DE CADENAS EN EJECUCIÓN"
 echo "============================================================"
 echo "Fecha UTC: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-echo "ROS_DISTRO=${ROS_DISTRO:-N/D} | ROS_DOMAIN_ID=$ROS_DOMAIN_ID"
+echo "ROS_DISTRO=${ROS_DISTRO:-N/D} | ROS_DOMAIN_ID=$ROS_DOMAIN_ID | RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-N/D}"
 echo
 
 for entry in "base|ros2 launch dif_bot_bringup main.launch.py" \
