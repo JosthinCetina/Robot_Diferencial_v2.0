@@ -102,9 +102,13 @@ port_open 9090 && fail "El puerto 9090 ya está ocupado. Ejecuta ./STOP_DIF_BOT.
 port_open 3000 && fail "El puerto 3000 ya está ocupado. Ejecuta ./STOP_DIF_BOT.sh para limpiar instancias anteriores."
 
 info "ROS 2 Jazzy | ROS_DOMAIN_ID=$ROS_DOMAIN_ID"
-info "Arrancando la simulación BASE sin Nav2 (Nav2 tendrá su propio proceso y log)..."
+# En WSL2 con recursos limitados, Gazebo nativo DiffDrive evita el bloqueo
+# del switch de controllers de gz_ros2_control durante la inicialización.
+# Se puede recuperar el modo ros2_control explícitamente con USE_ROS2_CONTROL=true.
+USE_ROS2_CONTROL="${USE_ROS2_CONTROL:-false}"
+info "Arrancando la simulación BASE sin Nav2 (use_ros2_control=$USE_ROS2_CONTROL)..."
 start_managed base "$LOG_DIR/base.log" ros2 launch dif_bot_bringup main.launch.py \
-  use_sim_time:=true use_ros2_control:=true launch_navigation:=false
+  use_sim_time:=true use_ros2_control:="$USE_ROS2_CONTROL" launch_navigation:=false
 
 # Do not report a successful simulation when Gazebo opened but the robot did
 # not spawn. ros_gz_sim/create prints this exact line only after Gazebo accepts
@@ -136,7 +140,7 @@ wait_for_robot_spawn(){
   tail -n 120 "$LOG_DIR/base.log" || true
   fail "No se confirmó la presencia del robot en Gazebo."
 }
-wait_for_robot_spawn 90
+wait_for_robot_spawn 180
 
 wait_for_ros2_controllers(){
   local limit="${1:-150}" jsb_active diff_active
@@ -177,7 +181,11 @@ wait_for_ros2_controllers(){
   tail -n 120 "$LOG_DIR/base.log" 2>/dev/null || true
   fail "El robot fue insertado, pero ros2_control no confirmó ambos controladores activos."
 }
-wait_for_ros2_controllers 150
+if [[ "$USE_ROS2_CONTROL" == "true" ]]; then
+  wait_for_ros2_controllers 180
+else
+  info "Modo Gazebo DiffDrive nativo: no requiere joint_state_broadcaster ni diff_drive_controller."
+fi
 
 # La base crea rosbridge y los nodos web después de 8 s en main.launch.py.
 # La navegación no se usa como condición para abrir la interfaz.
