@@ -46,12 +46,13 @@ class LifecycleStartup(Node):
     def _start_manager(self, service_name, client, executor):
         request = ManageLifecycleNodes.Request()
         request.command = ManageLifecycleNodes.Request.STARTUP
+        self.get_logger().info(f'Enviando STARTUP a {service_name}.')
         future = client.call_async(request)
-        deadline = time.monotonic() + TRANSITION_TIMEOUT_SEC
 
         # Spin the executor, not the Node: callbacks complete the service future.
-        while rclpy.ok() and not future.done() and time.monotonic() < deadline:
-            executor.spin_once(timeout_sec=0.1)
+        executor.spin_until_future_complete(
+            future, timeout_sec=TRANSITION_TIMEOUT_SEC
+        )
 
         if not future.done():
             client.remove_pending_request(future)
@@ -67,7 +68,8 @@ class LifecycleStartup(Node):
             )
 
         self.get_logger().info(
-            f'Gestor de ciclo de vida activo: {service_name}'
+            f'Gestor de ciclo de vida activo: {service_name} '
+            '(STARTUP respondió success=true).'
         )
 
     def start_all(self, executor):
