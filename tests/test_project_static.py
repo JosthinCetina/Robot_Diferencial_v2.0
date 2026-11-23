@@ -287,7 +287,7 @@ def test_startup_requires_rosbridge_and_production_frontend_before_nav2():
     assert 'wait_for_robot_spawn 90' in start
     assert 'wait_for_ros2_controllers 150' in start
     assert 'run preview' in start
-    assert 'wait_port 3000 20' in start
+    assert 'wait_port 3000 45' in start
     assert 'wait_port 9090 20' in start
     assert 'No se inicia Nav2: la interfaz de teleoperación no está disponible.' in start
 
