@@ -28,10 +28,31 @@ docker info >/dev/null 2>&1 || fail "Docker no está disponible. Abre Docker Des
 
 mkdir -p "$DEPLOY_ROOT"
 
+# Docker runs build/runtime commands as root against this WSL bind mount.
+# A previous Git operation inside the container may leave .git/objects owned by root.
+# Repair only Git metadata before host-side Git operations; do not chown source/build files.
+repair_git_metadata_ownership() {
+  local git_dir="$PROJECT_DIR/.git"
+  local current_uid current_gid foreign_entry
+  current_uid="$(id -u)"
+  current_gid="$(id -g)"
+
+  [[ -d "$git_dir" ]] || return 0
+  foreign_entry="$(find "$git_dir" -xdev ! -uid "$current_uid" -print -quit 2>/dev/null || true)"
+  if [[ -n "$foreign_entry" ]]; then
+    warn "Se detectaron archivos de Git que no pertenecen al usuario actual."
+    warn "Corrigiendo propietario únicamente en $git_dir (UID:GID ${current_uid}:${current_gid})."
+    command -v sudo >/dev/null 2>&1 || fail "Se necesita sudo para reparar la propiedad de $git_dir."
+    sudo chown -R "$current_uid:$current_gid" "$git_dir" || fail "No se pudo reparar la propiedad de $git_dir."
+  fi
+  [[ -w "$git_dir/objects" ]] || fail "El usuario actual aún no puede escribir en $git_dir/objects."
+}
+
 # Download the complete repository into a dedicated deployment checkout.
 # This does not overwrite the user's existing ~/github/Robot_Diferencial_v2.0 checkout.
 if [[ -d "$PROJECT_DIR/.git" ]]; then
   info "Actualizando checkout de despliegue: $PROJECT_DIR"
+  repair_git_metadata_ownership
   cd "$PROJECT_DIR"
 
   REMOTE="$(git remote get-url origin 2>/dev/null || true)"
