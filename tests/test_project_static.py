@@ -108,52 +108,21 @@ def test_nav2_bt_action_ack_and_cancel_timeouts_are_wsl_tolerant():
     assert bt['wait_for_service_timeout'] >= 1000
 
 
-def test_nav2_lifecycle_has_extended_bond_timeout_and_delayed_startup():
+def test_nav2_lifecycle_restores_proven_autostart():
     launch = (
         ROOT / 'src/dif_bot_navigation/launch/navigation.launch.py'
     ).read_text()
     assert "'bond_timeout': 15.0" in launch
-    assert "'autostart': False" in launch
-    assert "executable='autostart_lifecycle_managers'" in launch
-    assert 'condition=IfCondition(autostart)' in launch
+    assert "'autostart': autostart" in launch
+    assert "DeclareLaunchArgument('autostart', default_value='true')" in launch
+    assert "executable='autostart_lifecycle_managers'" not in launch
     assert 'lifecycle_manager_localization' in launch
     assert 'lifecycle_manager_navigation' in launch
-
-    cmake = (ROOT / 'src/dif_bot_navigation/CMakeLists.txt').read_text()
-    assert 'autostart_lifecycle_managers.py' in cmake
-
-
-def test_nav2_lifecycle_startup_waits_for_dds_discovery_and_starts_in_order():
-    helper = (
-        ROOT / 'src/dif_bot_navigation/scripts/autostart_lifecycle_managers.py'
-    ).read_text()
-    assert 'ManageLifecycleNodes.Request.STARTUP' in helper
-    assert 'time.monotonic()' in helper
-    assert 'time.sleep(DISCOVERY_SETTLE_SEC)' in helper
-    assert 'wait_for_service(timeout_sec=0.5)' in helper
-    assert helper.index("'/lifecycle_manager_localization/manage_nodes'") < helper.index("'/lifecycle_manager_navigation/manage_nodes'")
-    assert 'TRANSITION_TIMEOUT_SEC = 180.0' in helper
-    assert 'SingleThreadedExecutor' in helper
-    assert 'executor.spin_once(timeout_sec=0.1)' in helper
-    assert 'executor.spin_until_future_complete(' not in helper
-    assert 'Enviando STARTUP a' in helper
-    assert 'STARTUP respondió success=true' in helper
-    assert 'rclpy.spin_once(self' not in helper
-    assert 'node.destroy_client(client)' not in helper
-    assert 'executor.remove_node(node)' in helper
-
-
-
-def test_container_uses_cyclonedds_for_nav2_lifecycle_service_reliability():
+def test_runtime_keeps_default_fastdds_middleware():
     dockerfile = (ROOT / 'Dockerfile').read_text()
     start = (ROOT / 'START_DIF_BOT.sh').read_text()
-    diagnostic = (ROOT / 'DIAGNOSTIC_DIF_BOT.sh').read_text()
-    assert 'ros-jazzy-rmw-cyclonedds-cpp' in dockerfile
-    assert 'RMW_IMPLEMENTATION=rmw_cyclonedds_cpp' in dockerfile
-    assert 'export RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}"' in start
-    assert 'RMW_IMPLEMENTATION' in diagnostic
-
-
+    assert 'RMW_IMPLEMENTATION=rmw_cyclonedds_cpp' not in dockerfile
+    assert 'RMW_IMPLEMENTATION' not in start
 def test_gazebo_sim_sensors_are_bridged():
     sensors = (
         ROOT / 'src/dif_bot_description/urdf/sensors.xacro'
@@ -342,13 +311,11 @@ def test_startup_requires_rosbridge_and_production_frontend_before_nav2():
 
 
 
-def test_wsl_startup_defaults_to_native_gazebo_diff_drive_and_keeps_ros2_control_opt_in():
+def test_wsl_startup_restores_proven_ros2_control_default():
     start = (ROOT / 'START_DIF_BOT.sh').read_text()
-    assert 'USE_ROS2_CONTROL="${USE_ROS2_CONTROL:-false}"' in start
+    assert 'USE_ROS2_CONTROL="${USE_ROS2_CONTROL:-true}"' in start
     assert 'use_ros2_control:="$USE_ROS2_CONTROL"' in start
-    assert 'if [[ "$USE_ROS2_CONTROL" == "true" ]]' in start
-    assert 'Modo Gazebo DiffDrive nativo' in start
-
+    assert 'wait_for_ros2_controllers 180' in start
 def test_ci_workflow_covers_static_checks_and_jazzy_build():
     workflow = (
         ROOT / '.github/workflows/static-validation.yml'
