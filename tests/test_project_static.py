@@ -273,7 +273,7 @@ def test_wsl_deployer_is_incremental_and_avoids_expensive_runtime_scans():
 def test_startup_requires_rosbridge_and_production_frontend_before_nav2():
     start = (ROOT / 'START_DIF_BOT.sh').read_text()
     assert 'wait_for_robot_spawn 90' in start
-    assert 'wait_for_ros2_controllers 75' in start
+    assert 'wait_for_ros2_controllers 150' in start
     assert 'run preview' in start
     assert 'wait_port 3000 20' in start
     assert 'wait_port 9090 20' in start
@@ -326,9 +326,10 @@ def test_start_script_fails_loudly_when_robot_did_not_spawn():
     start = (ROOT / 'START_DIF_BOT.sh').read_text()
     assert 'wait_for_robot_spawn 90' in start
     assert 'Entity creation successful.' in start
-    assert 'wait_for_ros2_controllers 75' in start
-    assert 'joint_state_broadcaster.*active' in start
-    assert 'diff_drive_controller.*active' in start
+    assert 'wait_for_ros2_controllers 150' in start
+    assert 'Configured and activated joint_state_broadcaster' in start
+    assert 'Configured and activated diff_drive_controller' in start
+    assert 'ros2 control list_controllers' not in start
 
 
 def test_nav2_progress_checker_tracks_rotation_at_xy_goal():
@@ -478,3 +479,14 @@ def test_gazebo_controller_spawners_allow_slow_simulation_startup():
     assert launch.count("'30'") >= 2
     assert launch.count("'--service-call-timeout'") == 2
     assert launch.count("'35'") >= 2
+
+
+def test_startup_waits_for_actual_controller_spawner_success_without_ros_cli_polling():
+    start = (ROOT / 'START_DIF_BOT.sh').read_text()
+    wait_block = start.split('wait_for_ros2_controllers(){', 1)[1].split(
+        '\\nwait_for_ros2_controllers 150', 1
+    )[0]
+    assert 'Configured and activated joint_state_broadcaster' in wait_block
+    assert 'Configured and activated diff_drive_controller' in wait_block
+    assert 'ros2 control list_controllers' not in wait_block
+    assert 'local limit="${1:-150}"' in wait_block
