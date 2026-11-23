@@ -32,8 +32,10 @@ def generate_launch_description():
     rosbridge = Node(package='rosbridge_server', executable='rosbridge_websocket',
         name='rosbridge_websocket', parameters=[{'port': 9090}], output='screen')
     relay = Node(package='dif_bot_web_bridge', executable='relay', name='web_relay_node', output='screen')
-    robot_pose = Node(package='dif_bot_web_bridge', executable='robot_pose', name='robot_pose_node', output='screen')
-    goal_bridge = Node(package='dif_bot_web_bridge', executable='goal_bridge', name='goal_bridge_node', output='screen')
+    robot_pose = Node(package='dif_bot_web_bridge', executable='robot_pose', name='robot_pose_node',
+        parameters=[{'use_sim_time': use_sim_time}], output='screen')
+    goal_bridge = Node(package='dif_bot_web_bridge', executable='goal_bridge', name='goal_bridge_node',
+        parameters=[{'use_sim_time': use_sim_time}], output='screen')
 
     nav = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(nav_share, 'launch', 'navigation.launch.py')),
