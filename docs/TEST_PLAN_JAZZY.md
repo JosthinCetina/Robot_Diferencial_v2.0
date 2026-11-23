@@ -11,7 +11,8 @@
 > - Timeouts internos del BT Navigator: configurados explícitamente en 1000 ms (`default_server_timeout`, `default_cancel_timeout` y `wait_for_service_timeout`); se añadió prueba estática de regresión. La validación funcional posterior es positiva, pero no se ha aislado cuánto de la mejora corresponde a este cambio.
 > - Diagnóstico anterior: TF `odom -> map` llegó 520 ms atrasada respecto al dato consultado; EKF a 30 Hz reportó actualizaciones de 34–94 ms y el controlador Nav2 incumplió su ciclo de 10 Hz bajo carga. Son síntomas de planificación temporal/carga, no prueba de que cada navegación falle.
 > - Pendientes funcionales: navegación repetida/robustez, TF y sincronización, misión secuencial, SLAM con mapa generado, convergencia AMCL y comparación de los dos modos de tracción.
-> - EKF: configuración ajustada de 30 a 20 Hz porque los logs medidos mostraron 34–94 ms por actualización frente a un presupuesto de 33 ms a 30 Hz. Se conserva `sensor_timeout=0.20` y las colas; falta validar en ejecución si disminuyen los incumplimientos sin degradar la localización. No se alteraron covarianzas.
+> - Arranque Nav2: el registro de 23 de noviembre mostró una carrera de descubrimiento DDS al activar inmediatamente `lifecycle_manager_navigation`. El arranque ahora se coordina: espera los servicios de ambos gestores, deja estabilizar Fast DDS durante 3 s y activa localización antes de navegación. Cambio de código publicado; la repetición funcional en WSL2 queda pendiente.
+- EKF: configuración ajustada de 30 a 20 Hz porque los logs medidos mostraron 34–94 ms por actualización frente a un presupuesto de 33 ms a 30 Hz. Se conserva `sensor_timeout=0.20` y las colas; falta validar en ejecución si disminuyen los incumplimientos sin degradar la localización. No se alteraron covarianzas.
 >
 > **Trabajo en paralelo:** mientras se ejecutan pruebas funcionales puntuales, revisar en código la cadena de timestamps/TF, el coste de EKF y los límites de la misión; los experimentos de SLAM y AMCL se ejecutan en sesiones mutuamente excluyentes con Nav2 para evitar dos autoridades de localización simultáneas.
 >
@@ -146,6 +147,17 @@ Para navegación sobre el mapa estático, relanzar el sistema con Nav2 y validar
 Criterios: mapa consistente con el mundo; AMCL mantiene partículas y pose; TF `map -> odom` existe; no hay saltos de localización ni offsets sistemáticos.
 
 ## Fase 7 — Navegación Nav2 a una meta individual
+
+El lanzamiento mantiene `autostart` desactivado dentro de cada gestor y, cuando `autostart:=true`, inicia `autostart_lifecycle_managers`. Este coordinador espera `/lifecycle_manager_localization/manage_nodes` y `/lifecycle_manager_navigation/manage_nodes`, deja 3 s para que DDS estabilice las conexiones y envía `STARTUP` en ese orden. Antes de probar metas, confirma en `navigation.log` que ambos gestores reporten `Managed nodes are active` y comprueba los seis estados:
+
+```bash
+for node in map_server amcl controller_server planner_server behavior_server bt_navigator; do
+  printf '%-22s' "$node"
+  ros2 lifecycle get "/$node"
+done
+```
+
+Criterio: los seis nodos deben mostrar `active`; si el coordinador informa timeout o `success=false`, no continúes con la misión y conserva el bloque de logs de arranque.
 
 ```bash
 ros2 action list | grep navigate_to_pose
