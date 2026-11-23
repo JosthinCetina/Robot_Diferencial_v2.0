@@ -29,9 +29,7 @@ def generate_launch_description():
 
     lifecycle_manager_parameters = {
         'use_sim_time': use_sim_time,
-        # The startup coordinator triggers STARTUP after DDS discovery has settled.
-        # Immediate autostart races lifecycle service endpoint discovery on Fast DDS.
-        'autostart': False,
+        'autostart': autostart,
         # WSL2/Gazebo can pause ROS process scheduling under CPU pressure.
         # Extend the bond deadline without hiding normal node exceptions.
         'bond_timeout': 15.0,
@@ -157,12 +155,5 @@ def generate_launch_description():
                 **lifecycle_manager_parameters,
                 'node_names': navigation_nodes,
             }],
-        ),
-        Node(
-            package='dif_bot_navigation',
-            executable='autostart_lifecycle_managers',
-            name='nav2_lifecycle_startup',
-            output='screen',
-            condition=IfCondition(autostart),
         ),
     ])
