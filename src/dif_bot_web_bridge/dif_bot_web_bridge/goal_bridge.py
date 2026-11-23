@@ -102,7 +102,7 @@ class GoalBridgeNode(Node):
         goal_msg = NavigateToPose.Goal()
         goal_msg.pose = msg
         goal_msg.pose.header.frame_id = 'map'
-        goal_msg.pose.header.stamp = Time().to_msg()
+        goal_msg.pose.header.stamp = self.get_clock().now().to_msg()
         # Normalize the quaternion; treat a zero quaternion as identity.
         q = goal_msg.pose.pose.orientation
         norm = math.sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w)
@@ -205,12 +205,23 @@ class GoalBridgeNode(Node):
 
         if status == GoalStatus.STATUS_ABORTED:
             pose = self.last_robot_pose
-            pose_age = time.monotonic() - self.last_robot_pose_wall
+            pose_age_wall = time.monotonic() - self.last_robot_pose_wall
+            pose_age_ros = float('inf')
+            if pose is not None:
+                pose_stamp = Time.from_msg(
+                    pose.header.stamp, clock_type=self.get_clock().clock_type
+                )
+                pose_age_ros = max(
+                    0.0,
+                    (self.get_clock().now() - pose_stamp).nanoseconds / 1e9,
+                )
+            pose_age = max(pose_age_wall, pose_age_ros)
             geometry = None
 
             if (
                 pose is not None
-                and pose_age <= 2.0
+                and pose_age_wall <= 2.0
+                and pose_age_ros <= 2.0
                 and pose.header.frame_id.lstrip('/')
                 == target_goal.header.frame_id.lstrip('/')
             ):
@@ -263,7 +274,8 @@ class GoalBridgeNode(Node):
                 message = (
                     'ABORTADO_NAV2: la acción terminó ABORTED y no se pudo '
                     'verificar la pose final en el mismo frame del objetivo '
-                    f'(pose_recibida_hace={pose_age:.2f}s). {nav_detail}'
+                    f'(recibida_hace={pose_age_wall:.2f}s; '
+                    f'antiguedad_TF={pose_age_ros:.2f}s). {nav_detail}'
                 )
 
             self.publish_status(message)
