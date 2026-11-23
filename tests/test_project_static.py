@@ -468,3 +468,13 @@ def test_wsl_deployer_avoids_local_expansion_inside_remote_shell():
     assert "awk '{print $1}'" not in deploy
     assert 'DIFBOT_SKIP_IMAGE_BUILD' in deploy
     assert 'LOCK_HASH="${LOCK_HASH%% *}"' in deploy
+
+
+def test_gazebo_controller_spawners_allow_slow_simulation_startup():
+    launch = (
+        ROOT / 'src/dif_bot_gazebo/launch/gazebo.launch.py'
+    ).read_text()
+    assert launch.count("'--switch-timeout'") == 2
+    assert launch.count("'30'") >= 2
+    assert launch.count("'--service-call-timeout'") == 2
+    assert launch.count("'35'") >= 2
