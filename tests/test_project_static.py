@@ -330,13 +330,21 @@ def test_wsl_deployer_is_incremental_and_avoids_expensive_runtime_scans():
 
 def test_startup_requires_rosbridge_and_production_frontend_before_nav2():
     start = (ROOT / 'START_DIF_BOT.sh').read_text()
-    assert 'wait_for_robot_spawn 90' in start
-    assert 'wait_for_ros2_controllers 150' in start
+    assert 'wait_for_robot_spawn 180' in start
+    assert 'wait_for_ros2_controllers 180' in start
     assert 'run preview' in start
     assert 'wait_port 3000 45' in start
     assert 'wait_port 9090 20' in start
     assert 'No se inicia Nav2: la interfaz de teleoperación no está disponible.' in start
 
+
+
+def test_wsl_startup_defaults_to_native_gazebo_diff_drive_and_keeps_ros2_control_opt_in():
+    start = (ROOT / 'START_DIF_BOT.sh').read_text()
+    assert 'USE_ROS2_CONTROL="${USE_ROS2_CONTROL:-false}"' in start
+    assert 'use_ros2_control:="$USE_ROS2_CONTROL"' in start
+    assert 'if [[ "$USE_ROS2_CONTROL" == "true" ]]' in start
+    assert 'Modo Gazebo DiffDrive nativo' in start
 
 def test_ci_workflow_covers_static_checks_and_jazzy_build():
     workflow = (
@@ -382,9 +390,9 @@ def test_gazebo_spawn_uses_explicit_world_and_robot_description_parameter():
 
 def test_start_script_fails_loudly_when_robot_did_not_spawn():
     start = (ROOT / 'START_DIF_BOT.sh').read_text()
-    assert 'wait_for_robot_spawn 90' in start
+    assert 'wait_for_robot_spawn 180' in start
     assert 'Entity creation successful.' in start
-    assert 'wait_for_ros2_controllers 150' in start
+    assert 'wait_for_ros2_controllers 180' in start
     assert 'Configured and activated joint_state_broadcaster' in start
     assert 'Configured and activated diff_drive_controller' in start
     assert 'output="$(timeout 4 ros2 control list_controllers' not in start
