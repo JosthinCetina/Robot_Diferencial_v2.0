@@ -131,7 +131,7 @@ def test_nav2_lifecycle_startup_waits_for_dds_discovery_and_starts_in_order():
     assert 'time.monotonic()' in helper
     assert 'time.sleep(DISCOVERY_SETTLE_SEC)' in helper
     assert 'wait_for_service(timeout_sec=0.5)' in helper
-    assert helper.index(MANAGERS[0]) < helper.index(MANAGERS[1])
+    assert helper.index("'/lifecycle_manager_localization/manage_nodes'") < helper.index("'/lifecycle_manager_navigation/manage_nodes'")
     assert 'TRANSITION_TIMEOUT_SEC = 180.0' in helper
 
 
