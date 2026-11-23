@@ -177,6 +177,18 @@ def test_default_waypoints_fall_in_free_cells_of_committed_map():
         assert occupied_probability <= occupied_threshold
 
 
+
+def test_ekf_frequency_is_wsl_tolerant_after_measured_30hz_deadline_misses():
+    ekf = yaml.safe_load(
+        (ROOT / 'src/dif_bot_navigation/config/ekf.yaml').read_text()
+    )['ekf_filter_node']['ros__parameters']
+    # Runtime logs showed 34-94 ms update times at 30 Hz (33 ms budget).
+    # 20 Hz gives a 50 ms budget and remains faster than Nav2's 10 Hz loop.
+    assert ekf['frequency'] == 20.0
+    assert ekf['sensor_timeout'] == 0.20
+    assert ekf['odom0_queue_size'] >= 10
+    assert ekf['imu0_queue_size'] >= 20
+
 def test_mission_server_has_bounded_waits_and_validation():
     mission = (
         ROOT / 'src/dif_bot_navigation/scripts/mission_server.py'
