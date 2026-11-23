@@ -137,29 +137,45 @@ wait_for_robot_spawn(){
 wait_for_robot_spawn 90
 
 wait_for_ros2_controllers(){
-  local limit="${1:-75}" output
-  info "Esperando controladores diferenciales activos..."
+  local limit="${1:-150}" jsb_active diff_active
+  info "Esperando confirmación de activación de ambos controladores (máx. ${limit}s)..."
+
+  # Trust the spawner's own success messages. Repeated `ros2 control list_controllers`
+  # CLI invocations can miss discovery during Gazebo startup and add load to WSL2.
+  # These messages are emitted only after each spawner's activate request succeeds.
   for ((s=1; s<=limit; s++)); do
-    output="$(timeout 4 ros2 control list_controllers 2>/dev/null || true)"
-    if grep -Eq 'joint_state_broadcaster.*active' <<<"$output" \
-       && grep -Eq 'diff_drive_controller.*active' <<<"$output"; then
-      info "joint_state_broadcaster y diff_drive_controller están activos."
+    jsb_active=false
+    diff_active=false
+
+    if grep -Fq "Configured and activated joint_state_broadcaster" "$LOG_DIR/base.log" 2>/dev/null; then
+      jsb_active=true
+    fi
+    if grep -Fq "Configured and activated diff_drive_controller" "$LOG_DIR/base.log" 2>/dev/null; then
+      diff_active=true
+    fi
+
+    if [[ "$jsb_active" == "true" && "$diff_active" == "true" ]]; then
+      info "joint_state_broadcaster y diff_drive_controller confirmaron activación."
       return 0
     fi
+
     if ! managed_alive base; then
       warn "La base terminó mientras se activaban los controladores:"
-      tail -n 100 "$LOG_DIR/base.log" || true
+      tail -n 100 "$LOG_DIR/base.log" 2>/dev/null || true
       fail "No se pudo activar el control del robot."
+    fi
+
+    if (( s % 15 == 0 )); then
+      info "Esperando controladores: ${s}/${limit}s (joint_state_broadcaster=${jsb_active}, diff_drive_controller=${diff_active})"
     fi
     sleep 1
   done
 
-  warn "Los controladores no llegaron a estado active:"
-  printf '%s\n' "$output"
-  tail -n 120 "$LOG_DIR/base.log" || true
-  fail "El robot fue insertado, pero ros2_control no quedó operativo."
+  warn "No se confirmó la activación de ambos controladores en ${limit}s (joint_state_broadcaster=${jsb_active}, diff_drive_controller=${diff_active})."
+  tail -n 120 "$LOG_DIR/base.log" 2>/dev/null || true
+  fail "El robot fue insertado, pero ros2_control no confirmó ambos controladores activos."
 }
-wait_for_ros2_controllers 75
+wait_for_ros2_controllers 150
 
 # La base crea rosbridge y los nodos web después de 8 s en main.launch.py.
 # La navegación no se usa como condición para abrir la interfaz.
