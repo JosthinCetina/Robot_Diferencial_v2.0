@@ -2,13 +2,18 @@
 
 > **Estado de ejecución actualizado — 22 de noviembre de 2026 (hora Colombia).**
 >
-> - Despliegue incremental y arranque de base/controladores: validado.
-> - Teleoperación web sostenida: validada por prueba funcional del usuario.
-> - Objetivo web `[1, 1, DEFAULT]`: `NavigateToPose` terminó `SUCCEEDED`.
-> - Objetivo web `[1, 1, 5°]`: `NavigateToPose` terminó `SUCCEEDED`; valida orientación final en la misma posición XY, no un recorrido largo.
-> - Los timeouts de acciones internas del BT Navigator se corrigieron de 20 ms a 1000 ms; `default_cancel_timeout` también quedó explícito en 1000 ms.
-> - El registro de una ejecución anterior mostró TF con 520 ms de antigüedad y errores intermitentes de frecuencia del EKF; la cadena temporal aún no está aprobada.
-> - Misión secuencial, SLAM, convergencia AMCL y comparación entre modos de tracción todavía no tienen evidencia funcional.
+> **Estado de ejecución actualizado — 23 de noviembre de 2026 (hora Colombia).**
+>
+> - Despliegue incremental, Gazebo y controladores: validados en ejecución.
+> - Teleoperación web sostenida e interfaz/rosbridge: validadas funcionalmente. Se observó un primer timeout transitorio de HTTP 3000 durante el arranque; un segundo despliegue quedó operativo. Vigilar recurrencia, sin atribuir todavía una causa.
+> - Navegación web `[1, 1, DEFAULT]`: `NavigateToPose` terminó `SUCCEEDED`.
+> - Navegación web `[-1, -1, 5°]`: `NavigateToPose` terminó `SUCCEEDED`. Es la segunda meta individual confirmada y demuestra desplazamiento entre coordenadas distintas.
+> - Timeouts internos del BT Navigator: configurados explícitamente en 1000 ms (`default_server_timeout`, `default_cancel_timeout` y `wait_for_service_timeout`); se añadió prueba estática de regresión. La validación funcional posterior es positiva, pero no se ha aislado cuánto de la mejora corresponde a este cambio.
+> - Diagnóstico anterior: TF `odom -> map` llegó 520 ms atrasada respecto al dato consultado; EKF a 30 Hz reportó actualizaciones de 34–94 ms y el controlador Nav2 incumplió su ciclo de 10 Hz bajo carga. Son síntomas de planificación temporal/carga, no prueba de que cada navegación falle.
+> - Pendientes funcionales: navegación repetida/robustez, TF y sincronización, misión secuencial, SLAM con mapa generado, convergencia AMCL y comparación de los dos modos de tracción.
+> - EKF: pendiente de optimización basada en medición. No reducir frecuencia ni alterar covarianzas sin capturar primero datos comparables.
+>
+> **Trabajo en paralelo:** mientras se ejecutan pruebas funcionales puntuales, revisar en código la cadena de timestamps/TF, el coste de EKF y los límites de la misión; los experimentos de SLAM y AMCL se ejecutan en sesiones mutuamente excluyentes con Nav2 para evitar dos autoridades de localización simultáneas.
 >
 > No declarar terminada una fase por compilación. Esta sección registra pruebas reportadas; las fases pendientes requieren evidencia de ejecución.
 
