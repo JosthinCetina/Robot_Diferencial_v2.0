@@ -5,6 +5,8 @@ WORKSPACE=/ros2_ws
 PID_DIR=/tmp/dif_bot_os
 LOG_DIR="$WORKSPACE/logs"
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-42}"
+# Use Cyclone DDS to avoid Fast DDS service-reply discovery races during lifecycle startup.
+export RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}"
 mkdir -p "$PID_DIR" "$LOG_DIR"
 
 info(){ printf '\033[0;32m[DIF_BOT]\033[0m %s\n' "$*"; }
