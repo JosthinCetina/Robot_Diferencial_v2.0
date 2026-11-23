@@ -108,13 +108,31 @@ def test_nav2_bt_action_ack_and_cancel_timeouts_are_wsl_tolerant():
     assert bt['wait_for_service_timeout'] >= 1000
 
 
-def test_nav2_lifecycle_has_extended_bond_timeout():
+def test_nav2_lifecycle_has_extended_bond_timeout_and_delayed_startup():
     launch = (
         ROOT / 'src/dif_bot_navigation/launch/navigation.launch.py'
     ).read_text()
     assert "'bond_timeout': 15.0" in launch
+    assert "'autostart': False" in launch
+    assert "executable='autostart_lifecycle_managers'" in launch
+    assert 'condition=IfCondition(autostart)' in launch
     assert 'lifecycle_manager_localization' in launch
     assert 'lifecycle_manager_navigation' in launch
+
+    cmake = (ROOT / 'src/dif_bot_navigation/CMakeLists.txt').read_text()
+    assert 'autostart_lifecycle_managers.py' in cmake
+
+
+def test_nav2_lifecycle_startup_waits_for_dds_discovery_and_starts_in_order():
+    helper = (
+        ROOT / 'src/dif_bot_navigation/scripts/autostart_lifecycle_managers.py'
+    ).read_text()
+    assert 'ManageLifecycleNodes.Request.STARTUP' in helper
+    assert 'time.monotonic()' in helper
+    assert 'time.sleep(DISCOVERY_SETTLE_SEC)' in helper
+    assert 'wait_for_service(timeout_sec=0.5)' in helper
+    assert helper.index(MANAGERS[0]) < helper.index(MANAGERS[1])
+    assert 'TRANSITION_TIMEOUT_SEC = 180.0' in helper
 
 
 def test_gazebo_sim_sensors_are_bridged():
