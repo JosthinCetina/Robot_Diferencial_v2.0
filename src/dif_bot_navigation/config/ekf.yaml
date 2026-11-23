@@ -2,7 +2,9 @@
 # Wheel odometry is normalized to /odom_raw in both drive modes.
 ekf_filter_node:
   ros__parameters:
-    frequency: 30.0
+    # WSL2 runtime logs showed 34-94 ms update times at 30 Hz (33 ms budget).
+    # 20 Hz provides a 50 ms budget while remaining faster than Nav2's 10 Hz loop.
+    frequency: 20.0
     sensor_timeout: 0.20
     two_d_mode: true
     publish_tf: true
