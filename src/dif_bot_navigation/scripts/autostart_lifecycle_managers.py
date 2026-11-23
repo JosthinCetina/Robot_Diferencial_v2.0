@@ -48,11 +48,18 @@ class LifecycleStartup(Node):
         request.command = ManageLifecycleNodes.Request.STARTUP
         self.get_logger().info(f'Enviando STARTUP a {service_name}.')
         future = client.call_async(request)
+        deadline = time.monotonic() + TRANSITION_TIMEOUT_SEC
 
-        # Spin the executor, not the Node: callbacks complete the service future.
-        executor.spin_until_future_complete(
-            future, timeout_sec=TRANSITION_TIMEOUT_SEC
-        )
+        # Process one executor event at a time while waiting for the service
+        # response. In the deployed ROS 2 Jazzy environment,
+        # spin_until_future_complete raised an internal _executor_event error
+        # and terminated this coordinator after localization STARTUP.
+        while (
+            rclpy.ok()
+            and not future.done()
+            and time.monotonic() < deadline
+        ):
+            executor.spin_once(timeout_sec=0.1)
 
         if not future.done():
             client.remove_pending_request(future)
@@ -82,7 +89,9 @@ class LifecycleStartup(Node):
 
         # Localization must be active before navigation costmaps and servers.
         for service_name in MANAGERS:
-            self._start_manager(service_name, self._clients[service_name], executor)
+            self._start_manager(
+                service_name, self._clients[service_name], executor
+            )
 
         self.get_logger().info(
             'Localización y servidores Nav2 completaron STARTUP.'
@@ -101,11 +110,12 @@ def main(args=None):
         node.get_logger().error(f'Falló el arranque de Nav2: {exc}')
         exit_code = 1
     finally:
+        # destroy_node() already destroys its clients. Destroying them
+        # explicitly first corrupts Node's internal client list and raises
+        # KeyError during node cleanup.
         executor.remove_node(node)
-        for client in node._clients.values():
-            node.destroy_client(client)
-        node.destroy_node()
         executor.shutdown()
+        node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
     return exit_code
